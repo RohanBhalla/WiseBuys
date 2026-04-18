@@ -7,6 +7,7 @@ import {
   Coffee,
   Leaf,
   MapPin,
+  RefreshCw,
   ShoppingBag,
   Sparkles,
   Trophy,
@@ -157,6 +158,15 @@ function CustomerDashboard() {
   const totalSpent = (spendingQ.data ?? []).reduce((s, i) => s + (i.total_spent ?? 0), 0);
   const merchantCount = (accountsQ.data ?? []).length;
   const balance = rewardsQ.data?.balance ?? 0;
+  const hasPurchaseInsights = (spendingQ.data?.length ?? 0) > 0;
+  const anyAccountNeverSynced = (accountsQ.data ?? []).some((a) => !a.last_synced_at);
+  const accountsReady = !accountsQ.isLoading;
+  const spendingReady = !spendingQ.isLoading;
+  const showConnectFirst = accountsReady && merchantCount === 0;
+  const showSyncPurchaseCta =
+    accountsReady &&
+    merchantCount > 0 &&
+    (anyAccountNeverSynced || (spendingReady && !hasPurchaseInsights));
 
   const vendorPoints = useMemo(() => {
     const map = new Map<number, number>();
@@ -178,6 +188,11 @@ function CustomerDashboard() {
   return (
     <main className="flex-1 flex flex-col">
       <Greeting displayName={displayName} />
+      <PurchaseDataCallout
+        showConnectFirst={showConnectFirst}
+        showSyncPurchaseCta={showSyncPurchaseCta}
+        accountsLoading={accountsQ.isLoading}
+      />
       <Stats merchantCount={merchantCount} balance={balance} totalSpent={totalSpent} recCount={recsQ.data?.length ?? 0} />
       <RecommendationsFeed items={recsQ.data ?? []} loading={recsQ.isLoading} />
       <RewardsAndValues
@@ -186,9 +201,59 @@ function CustomerDashboard() {
         values={values}
         onToggle={onToggle}
         patchBusy={patchProfileM.isPending}
-        showConnectCta={merchantCount === 0}
+        showConnectCta={showConnectFirst}
+        showSyncCta={showSyncPurchaseCta}
       />
     </main>
+  );
+}
+
+function PurchaseDataCallout({
+  showConnectFirst,
+  showSyncPurchaseCta,
+  accountsLoading,
+}: {
+  showConnectFirst: boolean;
+  showSyncPurchaseCta: boolean;
+  accountsLoading: boolean;
+}) {
+  if (accountsLoading || (!showConnectFirst && !showSyncPurchaseCta)) return null;
+
+  const connect = showConnectFirst;
+  const title = connect ? "Link a merchant to import purchases" : "Sync your linked stores";
+  const body = connect
+    ? "WiseBuys reads SKU-level orders from Knot after you connect a store. Link first, then run a sync so spending, rewards, and recommendations can update."
+    : "Your store is connected, but purchase history is not in WiseBuys yet (or a sync did not finish). Open Connect and tap Sync now on each account to pull orders and line items into the dashboard.";
+  const Icon = connect ? ShoppingBag : RefreshCw;
+
+  return (
+    <section className="border-b border-charcoal/15 bg-cream-deep/60">
+      <div className="mx-auto max-w-7xl px-5 sm:px-8 py-7 md:py-8">
+        <PaperCard className="p-6 md:p-8 border-terracotta/30 shadow-sm">
+          <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+            <div className="flex gap-4 min-w-0">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-sm border border-terracotta/35 bg-terracotta/10 text-terracotta">
+                <Icon className="h-6 w-6" strokeWidth={1.6} aria-hidden />
+              </div>
+              <div className="min-w-0">
+                <Eyebrow>{connect ? "Next step" : "Action needed"}</Eyebrow>
+                <h2 className="display-serif text-xl sm:text-2xl text-charcoal mt-1 leading-snug">{title}</h2>
+                <p className="mt-2 text-sm text-charcoal/70 leading-relaxed max-w-2xl">{body}</p>
+              </div>
+            </div>
+            <div className="flex shrink-0 md:pl-4">
+              <Link
+                to="/dashboard/connect"
+                className="inline-flex w-full md:w-auto items-center justify-center gap-2 bg-terracotta text-cream px-5 py-3 text-sm font-semibold tracking-wide rounded-sm hover:bg-charcoal transition-colors text-center"
+              >
+                {connect ? "Connect a merchant" : "Go to Connect & sync"}
+                <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
+              </Link>
+            </div>
+          </div>
+        </PaperCard>
+      </div>
+    </section>
   );
 }
 
@@ -202,7 +267,7 @@ function Greeting({ displayName }: { displayName: string }) {
             Good day, <span className="italic text-terracotta">{displayName}</span>.
           </h1>
           <p className="mt-4 text-charcoal/70 max-w-xl">
-            Linked merchants, spending totals, and recommendations below are live from your WiseBuys API.
+            Spending, rewards, and recommendations update after Knot merchants are linked and synced.
           </p>
         </div>
         <div className="md:col-span-4">
@@ -227,8 +292,16 @@ function Stats({
   recCount: number;
 }) {
   const stats = [
-    { num: String(merchantCount), label: "linked merchants", caption: "Connect more in one tap." },
-    { num: `$${totalSpent.toFixed(0)}`, label: "tracked spend (insights)", caption: "From synced Knot purchases." },
+    {
+      num: String(merchantCount),
+      label: "linked merchants",
+      caption: merchantCount === 0 ? "Connect on the next screen to get started." : "Manage and sync on Connect.",
+    },
+    {
+      num: `$${totalSpent.toFixed(0)}`,
+      label: "tracked spend (insights)",
+      caption: totalSpent === 0 ? "Run a sync after linking — totals fill in from Knot." : "From synced Knot purchases.",
+    },
     { num: String(balance), label: "reward points", caption: `${recCount} live recommendations below.` },
   ];
   return (
@@ -281,7 +354,11 @@ function RecommendationsFeed({ items, loading }: { items: RecommendationItem[]; 
         {loading && <p className="mt-6 text-sm text-charcoal/60">Loading recommendations…</p>}
         {!loading && items.length === 0 && (
           <PaperCard className="mt-8 p-8 text-charcoal/70">
-            No recommendations yet — link merchants and set value focuses, or wait for approved vendor products in your categories.
+            No recommendations yet — after you{" "}
+            <Link to="/dashboard/connect" className="font-semibold text-terracotta underline underline-offset-4">
+              link and sync merchants
+            </Link>
+            , set your value focuses, and give approved vendor products time to match your purchase history.
           </PaperCard>
         )}
 
@@ -371,6 +448,7 @@ function RewardsAndValues({
   onToggle,
   patchBusy,
   showConnectCta,
+  showSyncCta,
 }: {
   balance: number;
   vendorPoints: [number, number][];
@@ -384,6 +462,7 @@ function RewardsAndValues({
   onToggle: (k: keyof typeof values) => void;
   patchBusy: boolean;
   showConnectCta: boolean;
+  showSyncCta: boolean;
 }) {
   const rows = [
     ["sustainable", "Sustainability", Leaf],
@@ -402,9 +481,18 @@ function RewardsAndValues({
           {showConnectCta && (
             <Link
               to="/dashboard/connect"
-              className="mt-3 inline-block text-sm font-semibold text-terracotta underline decoration-2 underline-offset-4"
+              className="mt-4 inline-flex items-center gap-2 bg-terracotta text-cream px-4 py-2.5 text-sm font-semibold rounded-sm hover:bg-charcoal transition-colors"
             >
-              Link a merchant to start earning link bonuses →
+              Connect a merchant <ArrowRight className="h-4 w-4" aria-hidden />
+            </Link>
+          )}
+          {showSyncCta && !showConnectCta && (
+            <Link
+              to="/dashboard/connect"
+              className="mt-4 inline-flex items-center gap-2 border border-terracotta/40 bg-terracotta/10 text-charcoal px-4 py-2.5 text-sm font-semibold rounded-sm hover:bg-terracotta/15 transition-colors"
+            >
+              <RefreshCw className="h-4 w-4 text-terracotta" aria-hidden />
+              Sync purchases on Connect
             </Link>
           )}
           <PaperCard className="mt-6 p-6">

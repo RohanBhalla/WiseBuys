@@ -54,11 +54,13 @@ def _record_event(
         related_vendor_user_id=related_vendor_user_id,
         extra=extra,
     )
-    db.add(event)
+    # Duplicate dedupe_key must not call session.rollback() — that would undo other
+    # flushed work in the same transaction (e.g. Knot purchases during sync).
     try:
-        db.flush()
+        with db.begin_nested():
+            db.add(event)
+            db.flush()
     except IntegrityError:
-        db.rollback()
         return GrantResult(granted=False, event=None, reason="duplicate")
     return GrantResult(granted=True, event=event)
 

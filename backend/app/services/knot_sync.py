@@ -15,6 +15,31 @@ from app.services import rewards as rewards_service
 EXCLUDED_ORDER_STATUSES = {"CANCELLED", "REFUNDED", "RETURNED"}
 
 
+def _transactions_from_sync_response(response: dict) -> list[dict]:
+    """Normalize Knot `/transactions/sync` payload — shape can vary slightly by API version."""
+
+    raw = response.get("transactions")
+    if isinstance(raw, list):
+        return [t for t in raw if isinstance(t, dict)]
+    data = response.get("data")
+    if isinstance(data, list):
+        return [t for t in data if isinstance(t, dict)]
+    if isinstance(data, dict):
+        inner = data.get("transactions")
+        if isinstance(inner, list):
+            return [t for t in inner if isinstance(t, dict)]
+    return []
+
+
+def _transaction_id_from_payload(txn: dict) -> str | None:
+    tid = txn.get("id")
+    if tid in (None, ""):
+        tid = txn.get("transaction_id")
+    if tid in (None, ""):
+        return None
+    return str(tid).strip()
+
+
 def external_user_id_for(user: User | int) -> str:
     user_id = user.id if isinstance(user, User) else user
     return f"wb-user-{user_id}"
@@ -86,10 +111,9 @@ def _persist_transaction(
     merchant_name: str | None,
     txn: dict,
 ) -> KnotPurchase | None:
-    raw_tid = txn.get("id")
-    if not raw_tid:
+    transaction_id = _transaction_id_from_payload(txn)
+    if not transaction_id:
         return None
-    transaction_id = str(raw_tid).strip()
 
     purchase = (
         db.query(KnotPurchase)
@@ -192,7 +216,19 @@ def sync_transactions_for_account(
             limit=page_limit,
         )
         pages += 1
-        transactions = response.get("transactions") or []
+        transactions = _transactions_from_sync_response(response)
+        # Stale cursor: first page empty but cursor set — retry from head once.
+        if pages == 1 and not transactions and cursor is not None:
+            cursor = None
+            account.sync_cursor = None
+            db.flush()
+            response = knot.sync_transactions(
+                external_user_id=account.external_user_id,
+                merchant_id=knot_merchant_id,
+                cursor=None,
+                limit=page_limit,
+            )
+            transactions = _transactions_from_sync_response(response)
         merchant = response.get("merchant") or {}
         if merchant.get("name"):
             last_merchant_name = merchant["name"]

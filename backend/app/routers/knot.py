@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.config import get_settings
 from app.deps import get_current_customer, get_db
@@ -131,7 +131,11 @@ def list_purchases(
     offset: int = 0,
     merchant_id: int | None = None,
 ) -> list[KnotPurchase]:
-    query = db.query(KnotPurchase).filter(KnotPurchase.user_id == user.id)
+    query = (
+        db.query(KnotPurchase)
+        .options(selectinload(KnotPurchase.line_items))
+        .filter(KnotPurchase.user_id == user.id)
+    )
     if merchant_id is not None:
         query = query.filter(KnotPurchase.knot_merchant_id == merchant_id)
     return (

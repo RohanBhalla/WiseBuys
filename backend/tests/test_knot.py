@@ -83,6 +83,27 @@ def test_sync_persists_transactions_and_resumes(client, fake_knot):
     assert res2.json()["transactions_persisted"] == 0
 
 
+def test_sync_retains_purchases_when_account_link_reward_already_granted(client, fake_knot):
+    """AUTHENTICATED webhook inserts account_linked; sync must not rollback flushed purchases on duplicate reward."""
+    headers = _customer(client)
+    me = client.get("/api/auth/me", headers=headers).json()
+    external_user_id = f"wb-user-{me['id']}"
+    client.post(
+        "/api/knot/webhooks",
+        json={
+            "event": "AUTHENTICATED",
+            "session_id": "sess-pre-sync",
+            "external_user_id": external_user_id,
+            "merchant": {"id": 19, "name": "DoorDash"},
+        },
+    )
+    fake_knot.pages = [{"transactions": sample_transactions(1, 2), "next_cursor": None}]
+    res = client.post("/api/knot/sync", headers=headers, json={"merchant_id": 19})
+    assert res.status_code == 200, res.text
+    purchases = client.get("/api/knot/purchases", headers=headers).json()
+    assert len(purchases) == 2
+
+
 def test_sync_same_transaction_twice_in_one_page_does_not_500(client, fake_knot):
     """Knot can repeat the same transaction id in one payload; upsert must not violate unique."""
     headers = _customer(client)
