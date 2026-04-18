@@ -176,6 +176,10 @@ export interface SyncResponse {
   rewards_points_awarded: number;
 }
 
+export interface KnotPurchasesMeta {
+  total: number;
+}
+
 export interface KnotMerchantLite {
   id: number;
   name: string | null;

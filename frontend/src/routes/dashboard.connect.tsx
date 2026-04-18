@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
-import { Link2, RefreshCw } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ExternalLink, Link2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { PaperCard, Eyebrow, SectionLabel, Stamp } from "@/components/Primitives";
 import { apiFetch, ApiError } from "@/lib/api";
@@ -11,6 +11,8 @@ import { cn } from "@/lib/utils";
 import type {
   CreateSessionResponse,
   KnotMerchantLite,
+  KnotPurchasesMeta,
+  LineItemPublic,
   MerchantAccountPublic,
   PurchasePublic,
   SyncResponse,
@@ -28,6 +30,149 @@ const KNOT_DEV_FALLBACK_MERCHANTS: KnotMerchantLite[] = [
   { id: 45, name: "Walmart (Knot docs example)" },
   { id: 19, name: "DoorDash (Knot quickstart)" },
 ];
+
+const PURCHASE_PAGE_SIZES = [25, 50, 100, 200] as const;
+type PurchasePageSize = (typeof PURCHASE_PAGE_SIZES)[number];
+
+function selectShellClassName(disabled?: boolean) {
+  return cn(
+    "mt-1.5 block w-full min-w-[10rem] rounded-sm border border-charcoal/15 bg-cream px-3 py-2 text-sm text-charcoal shadow-sm",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-terracotta/40 focus-visible:border-terracotta/50",
+    disabled && "opacity-50 cursor-not-allowed",
+  );
+}
+
+function formatOccurredAt(iso: string | null): string {
+  if (!iso) return "Date unknown";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(d);
+}
+
+function formatMoney(amount: string | number | null, currency: string | null): string {
+  if (amount == null || amount === "") return "—";
+  const n = typeof amount === "number" ? amount : Number.parseFloat(String(amount));
+  if (!Number.isFinite(n)) return String(amount);
+  const code = (currency && currency.length === 3 ? currency : "USD").toUpperCase();
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: code,
+      maximumFractionDigits: 2,
+    }).format(n);
+  } catch {
+    return `${code} ${n.toFixed(2)}`;
+  }
+}
+
+function formatLineMoney(li: LineItemPublic, orderCurrency: string | null): string | null {
+  if (li.total != null && li.total !== "") return formatMoney(li.total, orderCurrency);
+  if (li.unit_price != null && li.quantity != null) {
+    const u = typeof li.unit_price === "number" ? li.unit_price : Number.parseFloat(String(li.unit_price));
+    const q = li.quantity;
+    if (Number.isFinite(u) && typeof q === "number" && q > 0) {
+      return formatMoney(u * q, orderCurrency);
+    }
+  }
+  return null;
+}
+
+function shortTxnId(id: string): string {
+  if (id.length <= 18) return id;
+  return `${id.slice(0, 8)}…${id.slice(-4)}`;
+}
+
+function PurchaseDetailRow({
+  purchase: p,
+  logoUrl,
+}: {
+  purchase: PurchasePublic;
+  logoUrl: string | null | undefined;
+}) {
+  const merchant = p.merchant_name ?? `Merchant ${p.knot_merchant_id}`;
+  const lines = p.line_items ?? [];
+  const preview = lines.slice(0, 5);
+  const rest = Math.max(0, lines.length - preview.length);
+
+  return (
+    <article className="border-b border-charcoal/10 py-4 last:border-0">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 flex-1 gap-3">
+          <MerchantAvatar name={p.merchant_name} logoUrl={logoUrl} size="sm" className="mt-0.5" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <div>
+              <div className="font-semibold text-charcoal leading-tight">{merchant}</div>
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-charcoal/60">
+                <time dateTime={p.occurred_at ?? undefined}>{formatOccurredAt(p.occurred_at)}</time>
+                {p.order_status ? (
+                  <>
+                    <span className="text-charcoal/30" aria-hidden>
+                      ·
+                    </span>
+                    <Stamp color="forest" className="!text-[0.6rem]">
+                      {p.order_status}
+                    </Stamp>
+                  </>
+                ) : null}
+                <span className="text-charcoal/30" aria-hidden>
+                  ·
+                </span>
+                <span className="num-display font-mono text-[0.7rem] text-charcoal/50" title={p.knot_transaction_id}>
+                  {shortTxnId(p.knot_transaction_id)}
+                </span>
+                {p.url ? (
+                  <>
+                    <span className="text-charcoal/30" aria-hidden>
+                      ·
+                    </span>
+                    <a
+                      href={p.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 font-semibold text-terracotta hover:text-charcoal underline underline-offset-2"
+                    >
+                      Order
+                      <ExternalLink className="h-3 w-3 shrink-0 opacity-80" aria-hidden />
+                    </a>
+                  </>
+                ) : null}
+              </div>
+            </div>
+            {preview.length > 0 ? (
+              <ul className="space-y-1 border-l-2 border-terracotta/25 pl-3 text-xs text-charcoal/80">
+                {preview.map((li) => {
+                  const sub = formatLineMoney(li, p.currency);
+                  return (
+                    <li key={li.id} className="flex gap-3 justify-between">
+                      <span className="min-w-0 truncate" title={li.description ?? undefined}>
+                        {li.name}
+                        {li.quantity != null && li.quantity > 1 ? (
+                          <span className="num-display text-charcoal/45"> ×{li.quantity}</span>
+                        ) : null}
+                      </span>
+                      {sub ? <span className="shrink-0 num-display text-charcoal/70">{sub}</span> : null}
+                    </li>
+                  );
+                })}
+                {rest > 0 ? (
+                  <li className="text-charcoal/50 italic">+{rest} more line item{rest === 1 ? "" : "s"}</li>
+                ) : null}
+              </ul>
+            ) : (
+              <p className="text-xs text-charcoal/50 italic">No line items stored for this order.</p>
+            )}
+          </div>
+        </div>
+        <div className="shrink-0 text-left sm:text-right sm:pl-4">
+          <div className="num-display text-lg font-semibold tabular-nums text-charcoal">{formatMoney(p.total, p.currency)}</div>
+          {p.currency ? (
+            <div className="mt-0.5 text-[0.65rem] font-medium uppercase tracking-wide text-charcoal/45">{p.currency}</div>
+          ) : null}
+        </div>
+      </div>
+    </article>
+  );
+}
 
 function sortMerchantsForConnect(list: KnotMerchantLite[]): KnotMerchantLite[] {
   const rank = (name: string) => {
@@ -91,6 +236,9 @@ function ConnectPage() {
   const auth = useRequireRole("customer");
   const qc = useQueryClient();
   const [merchantId, setMerchantId] = useState(19);
+  const [purchasePageSize, setPurchasePageSize] = useState<PurchasePageSize>(50);
+  const [purchaseOffset, setPurchaseOffset] = useState(0);
+  const [purchaseMerchantFilter, setPurchaseMerchantFilter] = useState<number | null>(null);
 
   const merchantsQ = useQuery({
     queryKey: ["knot", "merchants"],
@@ -124,9 +272,34 @@ function ConnectPage() {
     enabled: auth.ready && !!auth.token,
   });
 
+  const purchasesListUrl = useMemo(() => {
+    const p = new URLSearchParams();
+    p.set("limit", String(purchasePageSize));
+    p.set("offset", String(purchaseOffset));
+    if (purchaseMerchantFilter != null) p.set("merchant_id", String(purchaseMerchantFilter));
+    return `/api/knot/purchases?${p.toString()}`;
+  }, [purchasePageSize, purchaseOffset, purchaseMerchantFilter]);
+
+  const purchasesMetaUrl = useMemo(() => {
+    if (purchaseMerchantFilter != null) {
+      return `/api/knot/purchases/meta?merchant_id=${purchaseMerchantFilter}`;
+    }
+    return "/api/knot/purchases/meta";
+  }, [purchaseMerchantFilter]);
+
+  useEffect(() => {
+    setPurchaseOffset(0);
+  }, [purchasePageSize, purchaseMerchantFilter]);
+
+  const purchasesMetaQ = useQuery({
+    queryKey: ["knot", "purchases-meta", purchaseMerchantFilter ?? "all"],
+    queryFn: () => apiFetch<KnotPurchasesMeta>(purchasesMetaUrl),
+    enabled: auth.ready && !!auth.token,
+  });
+
   const purchasesQ = useQuery({
-    queryKey: ["knot", "purchases"],
-    queryFn: () => apiFetch<PurchasePublic[]>("/api/knot/purchases?limit=20"),
+    queryKey: ["knot", "purchases", purchasePageSize, purchaseOffset, purchaseMerchantFilter ?? "all"],
+    queryFn: () => apiFetch<PurchasePublic[]>(purchasesListUrl),
     enabled: auth.ready && !!auth.token,
   });
 
@@ -140,6 +313,7 @@ function ConnectPage() {
       toast.success(`Synced: ${data.transactions_persisted} transactions saved.`);
       void qc.invalidateQueries({ queryKey: ["knot", "accounts"] });
       void qc.invalidateQueries({ queryKey: ["knot", "purchases"] });
+      void qc.invalidateQueries({ queryKey: ["knot", "purchases-meta"] });
       void qc.invalidateQueries({ queryKey: ["rewards", "me"] });
       void qc.invalidateQueries({ queryKey: ["insights", "spending"] });
     },
@@ -173,6 +347,13 @@ function ConnectPage() {
     },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : "Could not create Knot session"),
   });
+
+  const purchaseTotal = purchasesMetaQ.data?.total ?? 0;
+  const purchaseRows = purchasesQ.data ?? [];
+  const rangeStart = purchaseTotal === 0 ? 0 : purchaseOffset + 1;
+  const rangeEnd = purchaseTotal === 0 ? 0 : purchaseOffset + purchaseRows.length;
+  const canPrev = purchaseOffset > 0;
+  const canNext = purchaseOffset + purchasePageSize < purchaseTotal;
 
   if (!auth.ready || !auth.token) {
     return (
@@ -351,26 +532,82 @@ function ConnectPage() {
       </div>
 
       <PaperCard className="mt-8 p-8">
-        <Eyebrow>Recent purchases</Eyebrow>
-        <p className="mt-2 text-sm text-charcoal/60">Last 20 orders stored for recommendations and insights.</p>
-        <div className="mt-4 space-y-1 max-h-96 overflow-y-auto text-sm">
-          {(purchasesQ.data ?? []).map((p) => (
-            <div
-              key={p.id}
-              className="flex items-center justify-between gap-3 border-b border-charcoal/10 py-2.5 last:border-0"
+        <Eyebrow>Stored purchases</Eyebrow>
+        <p className="mt-2 text-sm text-charcoal/60">
+          Browse what WiseBuys has saved from Knot (up to 200 per page). Use filters and pagination for larger histories.
+        </p>
+
+        <div className="mt-5 flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-end lg:justify-between">
+          <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end">
+            <label className="text-[0.65rem] font-semibold uppercase tracking-widest text-charcoal/45">
+              Rows per page
+              <select
+                className={selectShellClassName()}
+                value={purchasePageSize}
+                onChange={(e) => setPurchasePageSize(Number(e.target.value) as PurchasePageSize)}
+              >
+                {PURCHASE_PAGE_SIZES.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-[0.65rem] font-semibold uppercase tracking-widest text-charcoal/45">
+              Merchant
+              <select
+                className={selectShellClassName(!(accountsQ.data ?? []).length)}
+                value={purchaseMerchantFilter ?? ""}
+                disabled={!(accountsQ.data ?? []).length}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setPurchaseMerchantFilter(v === "" ? null : Number(v));
+                }}
+              >
+                <option value="">All linked</option>
+                {(accountsQ.data ?? []).map((a) => (
+                  <option key={a.id} value={a.knot_merchant_id}>
+                    {a.merchant_name ?? `Merchant ${a.knot_merchant_id}`}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <p className="text-xs text-charcoal/55 lg:text-right">
+            {purchasesMetaQ.isLoading && "Counting rows…"}
+            {!purchasesMetaQ.isLoading &&
+              (purchaseTotal === 0
+                ? "No rows match this filter."
+                : `Showing ${rangeStart}–${rangeEnd} of ${purchaseTotal}`)}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={!canPrev || purchasesQ.isLoading}
+              onClick={() => setPurchaseOffset((o) => Math.max(0, o - purchasePageSize))}
+              className="rounded-sm border border-charcoal/15 bg-cream px-3 py-2 text-xs font-semibold text-charcoal hover:border-charcoal/30 disabled:opacity-40"
             >
-              <div className="flex min-w-0 items-center gap-2.5">
-                <MerchantAvatar
-                  name={p.merchant_name}
-                  logoUrl={logoByMerchantId.get(p.knot_merchant_id) ?? null}
-                  size="sm"
-                />
-                <span className="text-charcoal/80 truncate">{p.merchant_name ?? `Merchant ${p.knot_merchant_id}`}</span>
-              </div>
-              <span className="num-display text-charcoal/70 shrink-0">{p.total != null ? String(p.total) : "—"}</span>
-            </div>
+              Previous page
+            </button>
+            <button
+              type="button"
+              disabled={!canNext || purchasesQ.isLoading}
+              onClick={() => setPurchaseOffset((o) => o + purchasePageSize)}
+              className="rounded-sm border border-charcoal/15 bg-cream px-3 py-2 text-xs font-semibold text-charcoal hover:border-charcoal/30 disabled:opacity-40"
+            >
+              Next page
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-4 max-h-[min(32rem,70vh)] overflow-y-auto text-sm">
+          {purchaseRows.map((p) => (
+            <PurchaseDetailRow key={p.id} purchase={p} logoUrl={logoByMerchantId.get(p.knot_merchant_id) ?? null} />
           ))}
-          {(purchasesQ.data ?? []).length === 0 && <p className="text-charcoal/60">No purchases stored yet.</p>}
+          {!purchasesQ.isLoading && purchaseRows.length === 0 && (
+            <p className="text-charcoal/60">No purchases stored yet for this view — try another merchant or run Sync now.</p>
+          )}
+          {purchasesQ.isLoading && <p className="text-charcoal/55">Loading purchases…</p>}
         </div>
       </PaperCard>
     </main>

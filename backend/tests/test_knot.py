@@ -51,6 +51,22 @@ def test_list_merchants(client, fake_knot):
     ]
 
 
+def test_purchases_limit_validation(client, fake_knot):
+    headers = _customer(client)
+    res = client.get("/api/knot/purchases?limit=500", headers=headers)
+    assert res.status_code == 422
+
+
+def test_purchases_meta_total(client, fake_knot):
+    headers = _customer(client)
+    fake_knot.pages = [{"transactions": sample_transactions(1, 2), "next_cursor": None}]
+    assert client.post("/api/knot/sync", headers=headers, json={"merchant_id": 19}).status_code == 200
+    meta = client.get("/api/knot/purchases/meta", headers=headers).json()
+    assert meta == {"total": 2}
+    meta_dd = client.get("/api/knot/purchases/meta?merchant_id=19", headers=headers).json()
+    assert meta_dd == {"total": 2}
+
+
 def test_sync_persists_transactions_and_resumes(client, fake_knot):
     headers = _customer(client)
     fake_knot.pages = [

@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
 
 from app.config import get_settings
@@ -10,6 +11,7 @@ from app.schemas.knot import (
     CreateSessionRequest,
     CreateSessionResponse,
     KnotMerchantLite,
+    KnotPurchasesMeta,
     MerchantAccountPublic,
     PurchasePublic,
     SyncRequest,
@@ -123,13 +125,26 @@ def sync_now(
     return SyncResponse(**summary)
 
 
+@router.get("/purchases/meta", response_model=KnotPurchasesMeta)
+def purchases_meta(
+    user: User = Depends(get_current_customer),
+    db: Session = Depends(get_db),
+    merchant_id: int | None = Query(default=None),
+) -> KnotPurchasesMeta:
+    q = db.query(func.count(KnotPurchase.id)).filter(KnotPurchase.user_id == user.id)
+    if merchant_id is not None:
+        q = q.filter(KnotPurchase.knot_merchant_id == merchant_id)
+    total = int(q.scalar() or 0)
+    return KnotPurchasesMeta(total=total)
+
+
 @router.get("/purchases", response_model=list[PurchasePublic])
 def list_purchases(
     user: User = Depends(get_current_customer),
     db: Session = Depends(get_db),
-    limit: int = 50,
-    offset: int = 0,
-    merchant_id: int | None = None,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    merchant_id: int | None = Query(default=None),
 ) -> list[KnotPurchase]:
     query = (
         db.query(KnotPurchase)

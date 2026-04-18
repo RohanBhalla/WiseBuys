@@ -64,6 +64,12 @@ class PurchasePublic(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class KnotPurchasesMeta(BaseModel):
+    """Row count for paginated ``GET /api/knot/purchases`` (same filters)."""
+
+    total: int
+
+
 class SyncRequest(BaseModel):
     merchant_id: int
 
