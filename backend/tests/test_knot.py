@@ -76,6 +76,17 @@ def test_sync_persists_transactions_and_resumes(client, fake_knot):
     assert res2.json()["transactions_persisted"] == 0
 
 
+def test_sync_same_transaction_twice_in_one_page_does_not_500(client, fake_knot):
+    """Knot can repeat the same transaction id in one payload; upsert must not violate unique."""
+    headers = _customer(client)
+    txn = sample_transactions(1, 1)[0]
+    fake_knot.pages = [{"transactions": [txn, txn], "next_cursor": None}]
+    res = client.post("/api/knot/sync", headers=headers, json={"merchant_id": 19})
+    assert res.status_code == 200, res.text
+    purchases = client.get("/api/knot/purchases", headers=headers).json()
+    assert len(purchases) == 1
+
+
 def test_authenticated_webhook_creates_account(client, fake_knot):
     headers = _customer(client)
     me = client.get("/api/auth/me", headers=headers).json()

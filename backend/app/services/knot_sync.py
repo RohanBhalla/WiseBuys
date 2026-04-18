@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.knot.client import KnotClient
@@ -85,9 +86,10 @@ def _persist_transaction(
     merchant_name: str | None,
     txn: dict,
 ) -> KnotPurchase | None:
-    transaction_id = txn.get("id")
-    if not transaction_id:
+    raw_tid = txn.get("id")
+    if not raw_tid:
         return None
+    transaction_id = str(raw_tid).strip()
 
     purchase = (
         db.query(KnotPurchase)
@@ -112,9 +114,24 @@ def _persist_transaction(
     )
 
     if purchase is None:
-        purchase = KnotPurchase(**purchase_data)
-        db.add(purchase)
-        db.flush()
+        nested = db.begin_nested()
+        try:
+            purchase = KnotPurchase(**purchase_data)
+            db.add(purchase)
+            db.flush()
+        except IntegrityError:
+            nested.rollback()
+            purchase = (
+                db.query(KnotPurchase)
+                .filter(KnotPurchase.knot_transaction_id == transaction_id)
+                .one_or_none()
+            )
+            if purchase is None:
+                raise
+            for key, value in purchase_data.items():
+                setattr(purchase, key, value)
+            db.query(KnotLineItem).filter(KnotLineItem.purchase_id == purchase.id).delete()
+            db.flush()
     else:
         for key, value in purchase_data.items():
             setattr(purchase, key, value)

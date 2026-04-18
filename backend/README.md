@@ -97,10 +97,12 @@ pytest
 > Requires `KNOT_CLIENT_ID` / `KNOT_SECRET` in `.env`. In dev these live at
 > `https://development.knotapi.com`.
 
-1. `GET /api/knot/merchants` (customer JWT) proxies Knot **List Merchants** for
-   `type=transaction_link` so the UI can populate merchant pickers / Knot SDK
-   `merchantIds`.
-2. As a customer, `POST /api/knot/sessions` with `{ "merchant_id": 19 }`. The
+1. `GET /api/knot/merchants` (customer JWT) calls Knot **POST /merchant/list**
+   with `type: transaction_link` and `platform: web` (List Merchants) so the UI
+   can populate merchant pickers / Knot SDK `merchantIds` (Amazon, Walmart,
+   DoorDash, etc., depending on your Knot product access).
+2. As a customer, `POST /api/knot/sessions` with `{ "merchant_id": <id> }` (e.g.
+   `19` for DoorDash in quickstart docs). The
    response contains a `session_id` you pass to the Knot Web SDK on the
    client. WiseBuys uses `wb-user-{user.id}` as the `external_user_id`.
 3. After the user completes link, Knot calls `POST /api/knot/webhooks` with

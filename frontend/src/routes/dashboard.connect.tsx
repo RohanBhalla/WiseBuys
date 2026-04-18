@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { PaperCard, Eyebrow, SectionLabel, Stamp } from "@/components/Primitives";
 import { apiFetch, ApiError } from "@/lib/api";
@@ -21,10 +21,32 @@ export const Route = createFileRoute("/dashboard/connect")({
   component: ConnectPage,
 });
 
+/** When Knot list API fails: doc examples (IDs from Knot docs; confirm in your dashboard if needed). */
+const KNOT_DEV_FALLBACK_MERCHANTS: KnotMerchantLite[] = [
+  { id: 45, name: "Walmart (Knot docs example)" },
+  { id: 19, name: "DoorDash (Knot quickstart)" },
+];
+
+function sortMerchantsForConnect(list: KnotMerchantLite[]): KnotMerchantLite[] {
+  const rank = (name: string) => {
+    const n = name.toLowerCase();
+    if (n.includes("amazon")) return 0;
+    if (n.includes("walmart")) return 1;
+    if (n.includes("doordash")) return 2;
+    return 50;
+  };
+  return [...list].sort((a, b) => {
+    const ra = rank(a.name ?? "");
+    const rb = rank(b.name ?? "");
+    if (ra !== rb) return ra - rb;
+    return (a.name ?? "").localeCompare(b.name ?? "");
+  });
+}
+
 function ConnectPage() {
   const auth = useRequireRole("customer");
   const qc = useQueryClient();
-  const [merchantId, setMerchantId] = useState<number>(19);
+  const [merchantId, setMerchantId] = useState(19);
 
   const merchantsQ = useQuery({
     queryKey: ["knot", "merchants"],
@@ -32,6 +54,12 @@ function ConnectPage() {
     enabled: auth.ready && !!auth.token,
     retry: false,
   });
+
+  const sortedMerchants = useMemo(() => {
+    if (merchantsQ.data?.length) return sortMerchantsForConnect(merchantsQ.data);
+    if (merchantsQ.isError) return KNOT_DEV_FALLBACK_MERCHANTS;
+    return [];
+  }, [merchantsQ.data, merchantsQ.isError]);
 
   const accountsQ = useQuery({
     queryKey: ["knot", "accounts"],
@@ -117,24 +145,29 @@ function ConnectPage() {
             {merchantsQ.isLoading && <p className="mt-2 text-sm text-charcoal/60">Loading merchants…</p>}
             {merchantsQ.isError && (
               <p className="mt-2 text-sm text-charcoal/70">
-                Could not load merchants (check Knot keys on the server). Defaulting to ID{" "}
-                <span className="num-display">19</span> (DoorDash in dev docs).
+                Could not load merchants from Knot (check <code className="bg-cream-deep px-1">KNOT_CLIENT_ID</code> /{" "}
+                <code className="bg-cream-deep px-1">KNOT_SECRET</code> and Transaction Link access). Showing common dev
+                IDs. After keys work, reload — Amazon and Walmart appear from Knot (sorted to the top).
               </p>
             )}
             <div className="mt-4 space-y-2 max-h-64 overflow-y-auto">
-              {(merchantsQ.data ?? [{ id: 19, name: "DoorDash (default)" }]).map((m) => (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => setMerchantId(m.id)}
-                  className={`w-full text-left px-3 py-2 rounded-sm border text-sm ${
-                    merchantId === m.id ? "border-terracotta bg-terracotta/10" : "border-charcoal/15 hover:border-charcoal/30"
-                  }`}
-                >
-                  <span className="font-semibold text-charcoal">{m.name ?? `Merchant ${m.id}`}</span>
-                  <span className="num-display text-charcoal/50 ml-2">#{m.id}</span>
-                </button>
-              ))}
+              {!merchantsQ.isLoading &&
+                sortedMerchants.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setMerchantId(m.id)}
+                    className={`w-full text-left px-3 py-2 rounded-sm border text-sm ${
+                      merchantId === m.id ? "border-terracotta bg-terracotta/10" : "border-charcoal/15 hover:border-charcoal/30"
+                    }`}
+                  >
+                    <span className="font-semibold text-charcoal">{m.name ?? `Merchant ${m.id}`}</span>
+                    <span className="num-display text-charcoal/50 ml-2">#{m.id}</span>
+                  </button>
+                ))}
+              {!merchantsQ.isLoading && sortedMerchants.length === 0 && (
+                <p className="text-sm text-charcoal/55">No merchants yet.</p>
+              )}
             </div>
             <button
               type="button"

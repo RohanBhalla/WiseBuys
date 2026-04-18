@@ -89,7 +89,30 @@ class KnotClient:
         return self._get(f"/transactions/{transaction_id}")
 
     def list_merchants(self, type_: str = "transaction_link") -> dict:
-        return self._get("/merchants", params={"type": type_})
+        """List merchants for a product type.
+
+        Knot exposes **POST /merchant/list** (not GET /merchants). We pass
+        ``platform: "web"`` so the Web SDK merchant set matches this list.
+        """
+
+        body = {"type": type_, "platform": "web"}
+        res = self._client.post("/merchant/list", json=body)
+        if res.status_code >= 400:
+            try:
+                payload = res.json()
+            except ValueError:
+                payload = res.text
+            raise KnotError(res.status_code, payload)
+        parsed: Any = res.json() if res.text else []
+        rows: list[Any]
+        if isinstance(parsed, list):
+            rows = parsed
+        elif isinstance(parsed, dict):
+            inner = parsed.get("merchants") or parsed.get("data")
+            rows = inner if isinstance(inner, list) else []
+        else:
+            rows = []
+        return {"merchants": rows}
 
     def link_account_dev(
         self,
