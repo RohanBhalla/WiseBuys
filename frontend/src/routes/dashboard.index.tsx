@@ -342,7 +342,7 @@ function RecommendationsFeed({ items, loading }: { items: RecommendationItem[]; 
   };
 
   return (
-    <section>
+    <section id="dashboard-recommendations" className="scroll-mt-28">
       <div className="mx-auto max-w-7xl px-5 sm:px-8 py-14">
         <div className="flex items-end justify-between flex-wrap gap-4">
           <div>

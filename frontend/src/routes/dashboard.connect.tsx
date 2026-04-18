@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { ExternalLink, Link2, RefreshCw } from "lucide-react";
+import { ArrowRight, ExternalLink, Link2, RefreshCw, X } from "lucide-react";
 import { toast } from "sonner";
 import { PaperCard, Eyebrow, SectionLabel, Stamp } from "@/components/Primitives";
 import { apiFetch, ApiError } from "@/lib/api";
@@ -239,6 +239,9 @@ function ConnectPage() {
   const [purchasePageSize, setPurchasePageSize] = useState<PurchasePageSize>(50);
   const [purchaseOffset, setPurchaseOffset] = useState(0);
   const [purchaseMerchantFilter, setPurchaseMerchantFilter] = useState<number | null>(null);
+  const [showRecommendationsCta, setShowRecommendationsCta] = useState(false);
+  /** Bumps on each successful sync so the CTA remounts and the entrance animation runs again. */
+  const [recommendationsCtaEnterKey, setRecommendationsCtaEnterKey] = useState(0);
 
   const merchantsQ = useQuery({
     queryKey: ["knot", "merchants"],
@@ -316,6 +319,9 @@ function ConnectPage() {
       void qc.invalidateQueries({ queryKey: ["knot", "purchases-meta"] });
       void qc.invalidateQueries({ queryKey: ["rewards", "me"] });
       void qc.invalidateQueries({ queryKey: ["insights", "spending"] });
+      void qc.invalidateQueries({ queryKey: ["recommendations", "me"] });
+      setRecommendationsCtaEnterKey((k) => k + 1);
+      setShowRecommendationsCta(true);
     },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : "Sync failed"),
   });
@@ -530,6 +536,44 @@ function ConnectPage() {
           </div>
         </PaperCard>
       </div>
+
+      {showRecommendationsCta && (
+        <PaperCard
+          key={recommendationsCtaEnterKey}
+          className="mt-8 p-6 md:p-8 border-terracotta/30 bg-gradient-to-br from-terracotta/[0.07] to-cream animate-paper-in"
+        >
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <Eyebrow>Next step</Eyebrow>
+              <p className="display-serif text-xl text-charcoal mt-2 leading-snug">
+                View recommendations on your dashboard
+              </p>
+              <p className="mt-2 text-sm text-charcoal/70 max-w-2xl">
+                Your purchase history just refreshed — open the dashboard to see value-aligned picks and explanations
+                tied to what you buy.
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-col gap-2 sm:items-end">
+              <Link
+                to="/dashboard"
+                hash="dashboard-recommendations"
+                className="inline-flex w-full sm:w-auto items-center justify-center gap-2 bg-terracotta text-cream px-5 py-3 text-sm font-semibold rounded-sm hover:bg-charcoal transition-colors"
+              >
+                Go to recommendations
+                <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
+              </Link>
+              <button
+                type="button"
+                onClick={() => setShowRecommendationsCta(false)}
+                className="inline-flex items-center justify-center gap-1.5 text-xs font-medium text-charcoal/55 hover:text-charcoal"
+              >
+                <X className="h-3.5 w-3.5" aria-hidden />
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </PaperCard>
+      )}
 
       <PaperCard className="mt-8 p-8">
         <Eyebrow>Stored purchases</Eyebrow>
