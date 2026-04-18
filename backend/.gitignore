@@ -1,0 +1,15 @@
+# Python / FastAPI (repo-wide ignores also in `/.gitignore`)
+.venv/
+.env.example
+__pycache__/
+*.pyc
+*.pyo
+*.db
+*.sqlite3
+.env
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/

@@ -1,0 +1,42 @@
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.orm import Session
+
+from app.deps import get_current_customer, get_db
+from app.models import User
+from app.schemas.recommendations import (
+    RecommendationItem,
+    SpendingInsight,
+    VendorProductSummary,
+)
+from app.services.recommendations import recommend_for_user, spending_insights
+
+router = APIRouter(prefix="/api/recommendations", tags=["recommendations"])
+
+
+@router.get("/me", response_model=list[RecommendationItem])
+def my_recommendations(
+    user: User = Depends(get_current_customer),
+    db: Session = Depends(get_db),
+    limit: int = Query(default=10, ge=1, le=50),
+) -> list[RecommendationItem]:
+    recs = recommend_for_user(db, user, limit=limit)
+    return [
+        RecommendationItem(
+            product=VendorProductSummary.model_validate(r.product),
+            score=r.score,
+            reasons=r.reasons,
+            evidence_line_item_ids=r.evidence_line_item_ids,
+        )
+        for r in recs
+    ]
+
+
+insights_router = APIRouter(prefix="/api/insights", tags=["insights"])
+
+
+@insights_router.get("/spending", response_model=list[SpendingInsight])
+def my_spending(
+    user: User = Depends(get_current_customer),
+    db: Session = Depends(get_db),
+) -> list[SpendingInsight]:
+    return [SpendingInsight(**row) for row in spending_insights(db, user)]

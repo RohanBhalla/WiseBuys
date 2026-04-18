@@ -1,0 +1,16 @@
+# Scoped to this directory. Full monorepo rules: `../.gitignore`
+
+node_modules
+dist
+.output
+.tanstack
+.wrangler
+.dev.vars
+.env
+.env.*.local
+*.local
+.DS_Store
+.vite
+coverage
+.parcel-cache
+.eslintcache

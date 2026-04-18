@@ -1,0 +1,54 @@
+# WiseBuys monorepo — backend (Python) + frontend (Node / Vite / TanStack)
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Editors & local tooling ---
+.idea/
+.vscode/
+*.swp
+*.swo
+*.tsbuildinfo
+
+# --- Secrets & env (keep *.example tracked) ---
+.env
+.env.local
+.env.*.local
+*.local
+!.env.example
+!**/.env.example
+
+# --- Logs ---
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- Backend (Python / FastAPI) — paths relative to repo root ---
+backend/.venv/
+backend/venv/
+backend/**/__pycache__/
+backend/**/*.py[cod]
+backend/**/$py.class
+backend/.pytest_cache/
+backend/.mypy_cache/
+backend/.ruff_cache/
+backend/**/*.db
+backend/**/*.sqlite3
+backend/dist/
+backend/build/
+backend/**/*.egg-info/
+
+# --- Frontend (Node / Vite / TanStack Start / Cloudflare) ---
+frontend/node_modules/
+frontend/dist/
+frontend/.output/
+frontend/.tanstack/
+frontend/.wrangler/
+frontend/.dev.vars
+frontend/.vite/
+frontend/coverage/
+frontend/.parcel-cache/
+frontend/.eslintcache
