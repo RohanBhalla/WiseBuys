@@ -50,8 +50,20 @@ uvicorn app.main:app --reload
 | `npm run lint`  | ESLint             |
 | `npm run format` | Prettier          |
 
-## Next steps (backend alignment)
+## Demo vendors (optional backend seed)
 
-- Point the UI at `VITE_API_URL` (FastAPI, default `http://localhost:8000`).
-- Add CORS on the backend for `http://localhost:8080` if you call the API from the browser.
-- Generate or hand-write a typed API client from `/openapi.json`.
+With **`SEED_DEMO_VENDORS=true`** in the Backend `.env`, the API seeds four approved brands (logins in [`Backend/README.md`](../Backend/README.md) — shared password `WiseBuysDemoVendor1!`). Use them alongside your customer account after **Knot sync** to see live recommendations.
+
+## Backend integration (implemented)
+
+- **Auth**: `/login` — JWT stored in `localStorage` (`wb_auth`). Customer vs vendor registration.
+- **Customer**: `/onboarding` (values + rewards prefs), `/dashboard` (recommendations, rewards, spending, tag toggles), `/dashboard/connect` (Knot Web SDK + sync).
+- **Vendor**: `/vendor` (status), `/vendor/apply`, `/vendor/catalog` (+ new/edit routes).
+- **API**: Browser calls use relative `/api/...` so the Vite dev **proxy** forwards to `VITE_API_URL` (avoids CORS during local dev). SSR uses `VITE_API_URL` as an absolute base.
+- **Knot**: Set `VITE_KNOT_CLIENT_ID` and `VITE_KNOT_ENVIRONMENT` in `.env`. In the Knot dashboard, allowlist `http://localhost:8080` and set the **webhook** URL to your reachable FastAPI host, e.g. `https://<ngrok-id>.ngrok-free.app/api/knot/webhooks` while `uvicorn` runs behind ngrok (`ngrok http 8000`).
+
+## Manual E2E check
+
+1. Backend: `uvicorn app.main:app --reload` from `Backend/`. Frontend: `npm run dev` from `frontend/`.
+2. Register a **customer** → complete `/onboarding` → confirm points on `/dashboard` → `/dashboard/connect` to link (Knot sandbox) and sync.
+3. Register a **vendor** → `/vendor/apply` → approve in Swagger `POST /api/admin/applications/{id}/decision` with `allowed_tag_ids` → `/vendor/catalog` CRUD.

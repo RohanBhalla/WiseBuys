@@ -4,6 +4,13 @@ from decimal import Decimal
 from pydantic import BaseModel, Field
 
 
+class KnotMerchantLite(BaseModel):
+    """Subset of Knot List Merchants response for the UI."""
+
+    id: int
+    name: str | None = None
+
+
 class CreateSessionRequest(BaseModel):
     merchant_id: int
     metadata: dict[str, str] | None = None

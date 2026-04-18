@@ -46,11 +46,34 @@ uvicorn app.main:app --reload
 
 Then open [http://localhost:8000/docs](http://localhost:8000/docs) for Swagger UI.
 
-The React app lives in `../frontend` (Vite dev server defaults to port **8080**; CORS is open for local development).
+The React app lives in `../frontend` (Vite dev server defaults to port **8080**). CORS allows `http://localhost:8080` and `http://127.0.0.1:8080` with credentials enabled for future cookie-based auth.
+
+**Knot webhooks (local):** Knot must POST to a public URL. Expose the API with `ngrok http 8000`, then set the webhook in the Knot customer dashboard to `https://<your-ngrok-host>/api/knot/webhooks` (same `KNOT_SECRET` for signature verification).
 
 The first run creates the SQLite database, seeds the value tags, and (if
 `BOOTSTRAP_ADMIN_EMAIL` / `BOOTSTRAP_ADMIN_PASSWORD` are set) creates the first
 admin account.
+
+### Demo vendors (Knot + recommendation testing)
+
+Set **`SEED_DEMO_VENDORS=true`** in `.env` and restart Uvicorn. On startup the
+API inserts **four** pre-approved vendors with **published** SKUs (see
+[`app/seeds/demo_vendors.py`](app/seeds/demo_vendors.py)). Product names and
+`category` values (`food-delivery`, `apparel`, `everyday`) are chosen to score
+against real **Transaction Link** history (e.g. DoorDash → `food-delivery` in
+[`app/services/recommendations.py`](app/services/recommendations.py)) via token
+overlap and category match.
+
+| Vendor | Sign-in email | Password | Allowed tags |
+| --- | --- | --- | --- |
+| GreenBasket Foods | `demo.v.greenbasket@wisebuys.example.com` | `WiseBuysDemoVendor1!` | sustainability, local |
+| Roots & Marrow Supply | `demo.v.rootsandmarrow@wisebuys.example.com` | same | black_owned, ethically_sourced |
+| Sunrise Roasters Collective | `demo.v.sunriseroasters@wisebuys.example.com` | same | women_owned, local |
+| Ethical Essentials Refill Co. | `demo.v.ethicalessentials@wisebuys.example.com` | same | fair_trade, sustainability |
+
+The seed is **idempotent** (skips if `demo.v.greenbasket@wisebuys.example.com`
+already exists). To re-run from scratch, delete your local SQLite file and
+start again.
 
 ## Tests
 
@@ -74,18 +97,21 @@ pytest
 > Requires `KNOT_CLIENT_ID` / `KNOT_SECRET` in `.env`. In dev these live at
 > `https://development.knotapi.com`.
 
-1. As a customer, `POST /api/knot/sessions` with `{ "merchant_id": 19 }`. The
+1. `GET /api/knot/merchants` (customer JWT) proxies Knot **List Merchants** for
+   `type=transaction_link` so the UI can populate merchant pickers / Knot SDK
+   `merchantIds`.
+2. As a customer, `POST /api/knot/sessions` with `{ "merchant_id": 19 }`. The
    response contains a `session_id` you pass to the Knot Web SDK on the
    client. WiseBuys uses `wb-user-{user.id}` as the `external_user_id`.
-2. After the user completes link, Knot calls `POST /api/knot/webhooks` with
+3. After the user completes link, Knot calls `POST /api/knot/webhooks` with
    `event = AUTHENTICATED`, then `NEW_TRANSACTIONS_AVAILABLE`. WiseBuys
    verifies the `Knot-Signature` header (HMAC-SHA256, base64) and persists the
    merchant account / triggers a sync.
-3. `POST /api/knot/sync { "merchant_id": 19 }` manually paginates through
+4. `POST /api/knot/sync { "merchant_id": 19 }` manually paginates through
    `/transactions/sync` (cursor-based) and upserts `knot_purchases` +
    `knot_line_items`.
-4. `GET /api/knot/purchases` lists the customer's normalized purchase history.
-5. `GET /api/knot/merchant-accounts` shows linked merchants and last sync
+5. `GET /api/knot/purchases` lists the customer's normalized purchase history.
+6. `GET /api/knot/merchant-accounts` shows linked merchants and last sync
    status (`connected` / `disconnected`).
 
 ### Recommendations & insights

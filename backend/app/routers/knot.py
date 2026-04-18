@@ -9,6 +9,7 @@ from app.models import KnotMerchantAccount, KnotPurchase, User
 from app.schemas.knot import (
     CreateSessionRequest,
     CreateSessionResponse,
+    KnotMerchantLite,
     MerchantAccountPublic,
     PurchasePublic,
     SyncRequest,
@@ -21,6 +22,32 @@ from app.services.knot_sync import (
 )
 
 router = APIRouter(prefix="/api/knot", tags=["knot"])
+
+
+@router.get("/merchants", response_model=list[KnotMerchantLite])
+def list_transaction_link_merchants(
+    user: User = Depends(get_current_customer),
+    knot: KnotClient = Depends(get_knot),
+) -> list[KnotMerchantLite]:
+    """Merchants available for Transaction Link (for Knot Web SDK `merchantIds`)."""
+    assert user.id  # customer auth
+    try:
+        data = knot.list_merchants("transaction_link")
+    except KnotError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=exc.payload)
+    raw = data.get("merchants") or data.get("data") or []
+    out: list[KnotMerchantLite] = []
+    for row in raw:
+        if not isinstance(row, dict):
+            continue
+        mid = row.get("id")
+        if mid is None:
+            continue
+        try:
+            out.append(KnotMerchantLite(id=int(mid), name=row.get("name")))
+        except (TypeError, ValueError):
+            continue
+    return out
 
 
 @router.post("/sessions", response_model=CreateSessionResponse, status_code=status.HTTP_201_CREATED)

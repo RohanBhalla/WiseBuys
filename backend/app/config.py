@@ -22,6 +22,9 @@ class Settings(BaseSettings):
 
     gemini_api_key: str | None = Field(default=None)
 
+    # When true, bootstraps approved demo vendors + catalog (see app/seeds/demo_vendors.py).
+    seed_demo_vendors: bool = Field(default=False)
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

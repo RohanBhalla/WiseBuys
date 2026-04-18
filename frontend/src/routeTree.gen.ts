@@ -10,12 +10,31 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as VendorRouteImport } from './routes/vendor'
+import { Route as OnboardingRouteImport } from './routes/onboarding'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as VendorIndexRouteImport } from './routes/vendor.index'
+import { Route as DashboardIndexRouteImport } from './routes/dashboard.index'
+import { Route as VendorCatalogRouteImport } from './routes/vendor.catalog'
+import { Route as VendorApplyRouteImport } from './routes/vendor.apply'
+import { Route as DashboardConnectRouteImport } from './routes/dashboard.connect'
+import { Route as VendorCatalogNewRouteImport } from './routes/vendor.catalog.new'
+import { Route as VendorCatalogProductIdRouteImport } from './routes/vendor.catalog.$productId'
 
 const VendorRoute = VendorRouteImport.update({
   id: '/vendor',
   path: '/vendor',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OnboardingRoute = OnboardingRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardRoute = DashboardRouteImport.update({
@@ -28,35 +47,132 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const VendorIndexRoute = VendorIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => VendorRoute,
+} as any)
+const DashboardIndexRoute = DashboardIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => DashboardRoute,
+} as any)
+const VendorCatalogRoute = VendorCatalogRouteImport.update({
+  id: '/catalog',
+  path: '/catalog',
+  getParentRoute: () => VendorRoute,
+} as any)
+const VendorApplyRoute = VendorApplyRouteImport.update({
+  id: '/apply',
+  path: '/apply',
+  getParentRoute: () => VendorRoute,
+} as any)
+const DashboardConnectRoute = DashboardConnectRouteImport.update({
+  id: '/connect',
+  path: '/connect',
+  getParentRoute: () => DashboardRoute,
+} as any)
+const VendorCatalogNewRoute = VendorCatalogNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => VendorCatalogRoute,
+} as any)
+const VendorCatalogProductIdRoute = VendorCatalogProductIdRouteImport.update({
+  id: '/$productId',
+  path: '/$productId',
+  getParentRoute: () => VendorCatalogRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/dashboard': typeof DashboardRoute
-  '/vendor': typeof VendorRoute
+  '/dashboard': typeof DashboardRouteWithChildren
+  '/login': typeof LoginRoute
+  '/onboarding': typeof OnboardingRoute
+  '/vendor': typeof VendorRouteWithChildren
+  '/dashboard/connect': typeof DashboardConnectRoute
+  '/vendor/apply': typeof VendorApplyRoute
+  '/vendor/catalog': typeof VendorCatalogRouteWithChildren
+  '/dashboard/': typeof DashboardIndexRoute
+  '/vendor/': typeof VendorIndexRoute
+  '/vendor/catalog/$productId': typeof VendorCatalogProductIdRoute
+  '/vendor/catalog/new': typeof VendorCatalogNewRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/dashboard': typeof DashboardRoute
-  '/vendor': typeof VendorRoute
+  '/login': typeof LoginRoute
+  '/onboarding': typeof OnboardingRoute
+  '/dashboard/connect': typeof DashboardConnectRoute
+  '/vendor/apply': typeof VendorApplyRoute
+  '/vendor/catalog': typeof VendorCatalogRouteWithChildren
+  '/dashboard': typeof DashboardIndexRoute
+  '/vendor': typeof VendorIndexRoute
+  '/vendor/catalog/$productId': typeof VendorCatalogProductIdRoute
+  '/vendor/catalog/new': typeof VendorCatalogNewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/dashboard': typeof DashboardRoute
-  '/vendor': typeof VendorRoute
+  '/dashboard': typeof DashboardRouteWithChildren
+  '/login': typeof LoginRoute
+  '/onboarding': typeof OnboardingRoute
+  '/vendor': typeof VendorRouteWithChildren
+  '/dashboard/connect': typeof DashboardConnectRoute
+  '/vendor/apply': typeof VendorApplyRoute
+  '/vendor/catalog': typeof VendorCatalogRouteWithChildren
+  '/dashboard/': typeof DashboardIndexRoute
+  '/vendor/': typeof VendorIndexRoute
+  '/vendor/catalog/$productId': typeof VendorCatalogProductIdRoute
+  '/vendor/catalog/new': typeof VendorCatalogNewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/dashboard' | '/vendor'
+  fullPaths:
+    | '/'
+    | '/dashboard'
+    | '/login'
+    | '/onboarding'
+    | '/vendor'
+    | '/dashboard/connect'
+    | '/vendor/apply'
+    | '/vendor/catalog'
+    | '/dashboard/'
+    | '/vendor/'
+    | '/vendor/catalog/$productId'
+    | '/vendor/catalog/new'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/dashboard' | '/vendor'
-  id: '__root__' | '/' | '/dashboard' | '/vendor'
+  to:
+    | '/'
+    | '/login'
+    | '/onboarding'
+    | '/dashboard/connect'
+    | '/vendor/apply'
+    | '/vendor/catalog'
+    | '/dashboard'
+    | '/vendor'
+    | '/vendor/catalog/$productId'
+    | '/vendor/catalog/new'
+  id:
+    | '__root__'
+    | '/'
+    | '/dashboard'
+    | '/login'
+    | '/onboarding'
+    | '/vendor'
+    | '/dashboard/connect'
+    | '/vendor/apply'
+    | '/vendor/catalog'
+    | '/dashboard/'
+    | '/vendor/'
+    | '/vendor/catalog/$productId'
+    | '/vendor/catalog/new'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  DashboardRoute: typeof DashboardRoute
-  VendorRoute: typeof VendorRoute
+  DashboardRoute: typeof DashboardRouteWithChildren
+  LoginRoute: typeof LoginRoute
+  OnboardingRoute: typeof OnboardingRoute
+  VendorRoute: typeof VendorRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -66,6 +182,20 @@ declare module '@tanstack/react-router' {
       path: '/vendor'
       fullPath: '/vendor'
       preLoaderRoute: typeof VendorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/onboarding': {
+      id: '/onboarding'
+      path: '/onboarding'
+      fullPath: '/onboarding'
+      preLoaderRoute: typeof OnboardingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard': {
@@ -82,13 +212,107 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/vendor/': {
+      id: '/vendor/'
+      path: '/'
+      fullPath: '/vendor/'
+      preLoaderRoute: typeof VendorIndexRouteImport
+      parentRoute: typeof VendorRoute
+    }
+    '/dashboard/': {
+      id: '/dashboard/'
+      path: '/'
+      fullPath: '/dashboard/'
+      preLoaderRoute: typeof DashboardIndexRouteImport
+      parentRoute: typeof DashboardRoute
+    }
+    '/vendor/catalog': {
+      id: '/vendor/catalog'
+      path: '/catalog'
+      fullPath: '/vendor/catalog'
+      preLoaderRoute: typeof VendorCatalogRouteImport
+      parentRoute: typeof VendorRoute
+    }
+    '/vendor/apply': {
+      id: '/vendor/apply'
+      path: '/apply'
+      fullPath: '/vendor/apply'
+      preLoaderRoute: typeof VendorApplyRouteImport
+      parentRoute: typeof VendorRoute
+    }
+    '/dashboard/connect': {
+      id: '/dashboard/connect'
+      path: '/connect'
+      fullPath: '/dashboard/connect'
+      preLoaderRoute: typeof DashboardConnectRouteImport
+      parentRoute: typeof DashboardRoute
+    }
+    '/vendor/catalog/new': {
+      id: '/vendor/catalog/new'
+      path: '/new'
+      fullPath: '/vendor/catalog/new'
+      preLoaderRoute: typeof VendorCatalogNewRouteImport
+      parentRoute: typeof VendorCatalogRoute
+    }
+    '/vendor/catalog/$productId': {
+      id: '/vendor/catalog/$productId'
+      path: '/$productId'
+      fullPath: '/vendor/catalog/$productId'
+      preLoaderRoute: typeof VendorCatalogProductIdRouteImport
+      parentRoute: typeof VendorCatalogRoute
+    }
   }
 }
 
+interface DashboardRouteChildren {
+  DashboardConnectRoute: typeof DashboardConnectRoute
+  DashboardIndexRoute: typeof DashboardIndexRoute
+}
+
+const DashboardRouteChildren: DashboardRouteChildren = {
+  DashboardConnectRoute: DashboardConnectRoute,
+  DashboardIndexRoute: DashboardIndexRoute,
+}
+
+const DashboardRouteWithChildren = DashboardRoute._addFileChildren(
+  DashboardRouteChildren,
+)
+
+interface VendorCatalogRouteChildren {
+  VendorCatalogProductIdRoute: typeof VendorCatalogProductIdRoute
+  VendorCatalogNewRoute: typeof VendorCatalogNewRoute
+}
+
+const VendorCatalogRouteChildren: VendorCatalogRouteChildren = {
+  VendorCatalogProductIdRoute: VendorCatalogProductIdRoute,
+  VendorCatalogNewRoute: VendorCatalogNewRoute,
+}
+
+const VendorCatalogRouteWithChildren = VendorCatalogRoute._addFileChildren(
+  VendorCatalogRouteChildren,
+)
+
+interface VendorRouteChildren {
+  VendorApplyRoute: typeof VendorApplyRoute
+  VendorCatalogRoute: typeof VendorCatalogRouteWithChildren
+  VendorIndexRoute: typeof VendorIndexRoute
+}
+
+const VendorRouteChildren: VendorRouteChildren = {
+  VendorApplyRoute: VendorApplyRoute,
+  VendorCatalogRoute: VendorCatalogRouteWithChildren,
+  VendorIndexRoute: VendorIndexRoute,
+}
+
+const VendorRouteWithChildren =
+  VendorRoute._addFileChildren(VendorRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  DashboardRoute: DashboardRoute,
-  VendorRoute: VendorRoute,
+  DashboardRoute: DashboardRouteWithChildren,
+  LoginRoute: LoginRoute,
+  OnboardingRoute: OnboardingRoute,
+  VendorRoute: VendorRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -20,6 +20,7 @@ from app.routers import (
     vendors,
 )
 from app.seeds.admin import bootstrap_admin
+from app.seeds.demo_vendors import seed_demo_vendors
 from app.seeds.tags import seed_tags
 
 
@@ -30,6 +31,7 @@ async def lifespan(_: FastAPI):
     try:
         seed_tags(db)
         bootstrap_admin(db)
+        seed_demo_vendors(db)
     finally:
         db.close()
     yield
@@ -49,8 +51,11 @@ def create_app() -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=False,
+        allow_origins=[
+            "http://localhost:8080",
+            "http://127.0.0.1:8080",
+        ],
+        allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )

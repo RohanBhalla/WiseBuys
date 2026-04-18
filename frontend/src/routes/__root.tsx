@@ -1,5 +1,8 @@
 import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 
+import { Toaster } from "@/components/ui/sonner";
+import { AuthProvider } from "@/lib/auth";
+import { AppQueryProvider } from "@/lib/query";
 import appCss from "../styles.css?url";
 
 function NotFoundComponent() {
@@ -29,9 +32,9 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Wiseguys — Shop smarter. Switch better. Earn while you're at it." },
+      { title: "WiseBuys — Shop smarter. Switch better. Earn while you're at it." },
       { name: "description", content: "Connect your purchases. We'll tell you what's better. A witty, premium platform for smarter shopping and brand discovery powered by transaction insights." },
-      { property: "og:title", content: "Wiseguys — Shop smarter. Switch better." },
+      { property: "og:title", content: "WiseBuys — Shop smarter. Switch better." },
       { property: "og:description", content: "Connect your purchases. We'll tell you what's better." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -69,5 +72,12 @@ function RootShell({ children }: { children: React.ReactNode }) {
 }
 
 function RootComponent() {
-  return <Outlet />;
+  return (
+    <AppQueryProvider>
+      <AuthProvider>
+        <Toaster position="top-right" />
+        <Outlet />
+      </AuthProvider>
+    </AppQueryProvider>
+  );
 }

@@ -52,10 +52,10 @@ function Hero() {
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-4">
             <Link
-              to="/dashboard"
+              to="/login"
               className="inline-flex items-center gap-2 bg-terracotta text-cream px-6 py-3.5 text-sm font-semibold tracking-wide rounded-sm hover:bg-charcoal transition-colors"
             >
-              Get your cart audited <ArrowRight className="h-4 w-4" />
+              Sign in & get audited <ArrowRight className="h-4 w-4" />
             </Link>
             <Link
               to="/vendor"
@@ -280,8 +280,8 @@ function CTA() {
           Three minutes to connect. A lifetime of slightly smug satisfaction.
         </p>
         <div className="mt-9 flex flex-wrap justify-center gap-4">
-          <Link to="/dashboard" className="inline-flex items-center gap-2 bg-terracotta text-cream px-7 py-4 text-sm font-semibold tracking-wide rounded-sm hover:bg-charcoal transition-colors">
-            Get your cart audited <ArrowRight className="h-4 w-4" />
+          <Link to="/login" className="inline-flex items-center gap-2 bg-terracotta text-cream px-7 py-4 text-sm font-semibold tracking-wide rounded-sm hover:bg-charcoal transition-colors">
+            Sign in & get audited <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
       </div>

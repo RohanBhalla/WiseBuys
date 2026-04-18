@@ -37,6 +37,13 @@ def test_create_session_returns_session(client, fake_knot):
     assert body["external_user_id"].startswith("wb-user-")
 
 
+def test_list_merchants(client, fake_knot):
+    headers = _customer(client)
+    res = client.get("/api/knot/merchants", headers=headers)
+    assert res.status_code == 200, res.text
+    assert res.json() == [{"id": 19, "name": "DoorDash"}]
+
+
 def test_sync_persists_transactions_and_resumes(client, fake_knot):
     headers = _customer(client)
     fake_knot.pages = [

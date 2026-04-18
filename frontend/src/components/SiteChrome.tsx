@@ -2,32 +2,36 @@ import { Link, useLocation } from "@tanstack/react-router";
 import { useState } from "react";
 import { Menu, X } from "lucide-react";
 import logo from "@/assets/wiseguys-logo.png";
+import { useAuth } from "@/lib/auth";
 
-const links = [
-  { to: "/", label: "Home" },
-  { to: "/dashboard", label: "Customer" },
-  { to: "/vendor", label: "Vendor" },
-] as const;
+const publicLinks = [{ to: "/", label: "Home" }] as const;
 
 export function SiteHeader() {
   const location = useLocation();
   const [open, setOpen] = useState(false);
+  const auth = useAuth();
+  const roleLinks: { to: string; label: string }[] =
+    auth.role === "customer"
+      ? [{ to: "/dashboard", label: "Dashboard" }]
+      : auth.role === "vendor"
+        ? [{ to: "/vendor", label: "Vendor" }]
+        : [];
 
   return (
     <header className="sticky top-0 z-40 border-b border-charcoal/15 bg-cream/85 backdrop-blur-sm">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 sm:px-8">
         <Link to="/" className="flex items-center gap-2.5 group" onClick={() => setOpen(false)}>
           <span className="flex h-10 w-10 items-center justify-center rounded-full bg-cream-deep overflow-hidden ring-1 ring-charcoal/15">
-            <img src={logo} alt="Wiseguys owl logo" className="h-full w-full object-cover" />
+            <img src={logo} alt="WiseBuys" className="h-full w-full object-cover" />
           </span>
-          <span className="display-serif text-2xl text-charcoal tracking-tight">Wiseguys</span>
+          <span className="display-serif text-2xl text-charcoal tracking-tight">WiseBuys</span>
           <span className="hidden sm:inline-block text-[0.6rem] font-semibold tracking-[0.18em] uppercase text-terracotta border border-terracotta/50 rounded-sm px-1.5 py-0.5 ml-1">
             Est. 2025
           </span>
         </Link>
 
         <nav className="hidden md:flex items-center gap-8">
-          {links.map((l) => {
+          {publicLinks.map((l) => {
             const active = location.pathname === l.to;
             return (
               <Link
@@ -42,12 +46,52 @@ export function SiteHeader() {
               </Link>
             );
           })}
-          <Link
-            to="/dashboard"
-            className="inline-flex items-center gap-2 bg-charcoal text-cream px-4 py-2 text-sm font-semibold rounded-sm hover:bg-terracotta transition-colors"
-          >
-            Audit my cart
-          </Link>
+          {roleLinks.map((l) => {
+            const active =
+              l.to === "/dashboard"
+                ? location.pathname === "/dashboard" || location.pathname.startsWith("/dashboard/")
+                : l.to === "/vendor"
+                  ? location.pathname === "/vendor" || location.pathname.startsWith("/vendor/")
+                  : location.pathname === l.to;
+            return (
+              <Link
+                key={l.to}
+                to={l.to}
+                className={`text-sm font-medium tracking-wide transition-colors ${
+                  active ? "text-terracotta" : "text-charcoal/75 hover:text-charcoal"
+                }`}
+              >
+                {l.label}
+                {active && <span className="block h-[2px] w-full bg-terracotta mt-1" />}
+              </Link>
+            );
+          })}
+          {!auth.token ? (
+            <Link
+              to="/login"
+              className="inline-flex items-center gap-2 bg-charcoal text-cream px-4 py-2 text-sm font-semibold rounded-sm hover:bg-terracotta transition-colors"
+            >
+              Sign in
+            </Link>
+          ) : (
+            <>
+              {auth.role === "customer" && (
+                <Link
+                  to="/dashboard/connect"
+                  className="text-sm font-medium text-charcoal/75 hover:text-charcoal tracking-wide"
+                >
+                  Link purchases
+                </Link>
+              )}
+              <button
+                type="button"
+                onClick={() => auth.logout()}
+                className="text-sm font-medium text-charcoal/75 hover:text-terracotta tracking-wide"
+              >
+                Sign out
+              </button>
+            </>
+          )}
         </nav>
 
         <button
@@ -61,7 +105,7 @@ export function SiteHeader() {
 
       {open && (
         <div className="md:hidden border-t border-charcoal/15 bg-cream px-5 py-4 space-y-3">
-          {links.map((l) => (
+          {[...publicLinks, ...roleLinks].map((l) => (
             <Link
               key={l.to}
               to={l.to}
@@ -71,13 +115,37 @@ export function SiteHeader() {
               {l.label}
             </Link>
           ))}
-          <Link
-            to="/dashboard"
-            onClick={() => setOpen(false)}
-            className="inline-flex items-center bg-charcoal text-cream px-4 py-2 text-sm font-semibold rounded-sm"
-          >
-            Audit my cart
-          </Link>
+          {!auth.token ? (
+            <Link
+              to="/login"
+              onClick={() => setOpen(false)}
+              className="inline-flex items-center bg-charcoal text-cream px-4 py-2 text-sm font-semibold rounded-sm"
+            >
+              Sign in
+            </Link>
+          ) : (
+            <>
+              {auth.role === "customer" && (
+                <Link
+                  to="/dashboard/connect"
+                  onClick={() => setOpen(false)}
+                  className="block text-base font-medium text-charcoal/85"
+                >
+                  Link purchases
+                </Link>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  auth.logout();
+                  setOpen(false);
+                }}
+                className="block text-base font-medium text-charcoal/85"
+              >
+                Sign out
+              </button>
+            </>
+          )}
         </div>
       )}
     </header>
@@ -89,7 +157,7 @@ export function SiteFooter() {
     <footer className="border-t border-charcoal/15 bg-cream-deep mt-20">
       <div className="mx-auto max-w-7xl px-5 py-12 sm:px-8 grid gap-8 md:grid-cols-4">
         <div className="md:col-span-2">
-          <div className="display-serif text-2xl text-charcoal">Wiseguys</div>
+          <div className="display-serif text-2xl text-charcoal">WiseBuys</div>
           <p className="mt-3 text-sm text-charcoal/70 max-w-sm leading-relaxed">
             Smarter shopping, powered by your receipts. We read between the lines so your wallet doesn't have to.
           </p>
@@ -113,7 +181,7 @@ export function SiteFooter() {
       </div>
       <div className="border-t border-charcoal/15">
         <div className="mx-auto max-w-7xl px-5 sm:px-8 py-5 flex flex-col sm:flex-row gap-2 justify-between text-xs text-charcoal/55">
-          <span>© 2025 Wiseguys Co. — Printed on the internet.</span>
+          <span>© 2025 WiseBuys — Printed on the internet.</span>
           <span className="tracking-[0.2em] uppercase">A periodical for the discerning shopper</span>
         </div>
       </div>
