@@ -9,6 +9,8 @@ class KnotMerchantLite(BaseModel):
 
     id: int
     name: str | None = None
+    logo: str | None = None
+    category: str | None = None
 
 
 class CreateSessionRequest(BaseModel):

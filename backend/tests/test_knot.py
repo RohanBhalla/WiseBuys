@@ -41,7 +41,14 @@ def test_list_merchants(client, fake_knot):
     headers = _customer(client)
     res = client.get("/api/knot/merchants", headers=headers)
     assert res.status_code == 200, res.text
-    assert res.json() == [{"id": 19, "name": "DoorDash"}]
+    assert res.json() == [
+        {
+            "id": 19,
+            "name": "DoorDash",
+            "logo": "https://example.com/merchants/doordash.png",
+            "category": "Food delivery",
+        }
+    ]
 
 
 def test_sync_persists_transactions_and_resumes(client, fake_knot):

@@ -179,4 +179,6 @@ export interface SyncResponse {
 export interface KnotMerchantLite {
   id: number;
   name: string | null;
+  logo?: string | null;
+  category?: string | null;
 }

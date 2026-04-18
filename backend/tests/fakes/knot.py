@@ -15,7 +15,12 @@ class FakeKnotClient:
         pages: list[dict] | None = None,
     ) -> None:
         self.session_id = session_id
-        self.merchant = merchant or {"id": 19, "name": "DoorDash"}
+        self.merchant = merchant or {
+            "id": 19,
+            "name": "DoorDash",
+            "logo": "https://example.com/merchants/doordash.png",
+            "category": "Food delivery",
+        }
         self.pages = pages if pages is not None else []
         self.calls: list[tuple[str, dict[str, Any]]] = []
 

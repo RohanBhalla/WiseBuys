@@ -44,7 +44,16 @@ def list_transaction_link_merchants(
         if mid is None:
             continue
         try:
-            out.append(KnotMerchantLite(id=int(mid), name=row.get("name")))
+            logo = row.get("logo")
+            category = row.get("category")
+            out.append(
+                KnotMerchantLite(
+                    id=int(mid),
+                    name=row.get("name"),
+                    logo=logo if isinstance(logo, str) else None,
+                    category=category if isinstance(category, str) else None,
+                )
+            )
         except (TypeError, ValueError):
             continue
     return out
