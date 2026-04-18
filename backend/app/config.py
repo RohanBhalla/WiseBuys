@@ -22,6 +22,20 @@ class Settings(BaseSettings):
 
     gemini_api_key: str | None = Field(default=None)
 
+    # Hybrid vector recommendations (Postgres + pgvector + Gemini embeddings).
+    embeddings_model: str = Field(default="gemini-embedding-001")
+    embeddings_dim: int = Field(default=768)
+    vector_recs_enabled: bool = Field(default=True)
+    vector_candidate_pool: int = Field(default=50)
+    vector_rec_weight_vec: float = Field(default=4.0)
+    vector_rec_weight_primary: float = Field(default=3.0)
+    vector_rec_weight_secondary: float = Field(default=1.0)
+    vector_rec_weight_category: float = Field(default=1.5)
+    vector_rec_weight_token_overlap: float = Field(default=0.5)
+    vector_rec_weight_recency: float = Field(default=0.35)
+    embeddings_batch_size: int = Field(default=32)
+    embeddings_max_retries: int = Field(default=4)
+
     # When true, bootstraps approved demo vendors + catalog (see app/seeds/demo_vendors.py).
     seed_demo_vendors: bool = Field(default=False)
 

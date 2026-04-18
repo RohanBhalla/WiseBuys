@@ -1,15 +1,30 @@
 # Python / FastAPI (repo-wide ignores also in `/.gitignore`)
-.venv/
-.env.example
+.venv/*
+venv/*
+.venv-test/
 __pycache__/
-*.pyc
-*.pyo
-*.db
-*.sqlite3
-.env
+*.py[cod]
+*$py.class
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 dist/
 build/
 *.egg-info/
+
+# Secrets — never commit real keys (`.env.example` stays tracked; see root `/.gitignore`)
+.env
+.env.local
+.env.*.local
+
+# SQLite & local DBs (e.g. `wisebuys.db`, pytest temp DBs, WAL mode files)
+*.db
+*.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Coverage
+.coverage
+coverage.xml
+htmlcov/

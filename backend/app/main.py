@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.database import Base, SessionLocal, engine
+from app.database import Base, SessionLocal, engine, ensure_sqlite_embedding_columns
 from app.models import *  # noqa: F401,F403  (ensure models are registered before create_all)
 from app.routers import (
     admin,
@@ -27,6 +27,7 @@ from app.seeds.tags import seed_tags
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     Base.metadata.create_all(bind=engine)
+    ensure_sqlite_embedding_columns(engine)
     db = SessionLocal()
     try:
         seed_tags(db)

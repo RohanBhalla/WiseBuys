@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -10,6 +11,8 @@ from sqlalchemy.orm import Session
 from app.knot.client import KnotClient
 from app.models import KnotLineItem, KnotMerchantAccount, KnotPurchase, User
 from app.services import rewards as rewards_service
+
+logger = logging.getLogger(__name__)
 
 # Per Knot docs we usually exclude these for spending insights and matching.
 EXCLUDED_ORDER_STATUSES = {"CANCELLED", "REFUNDED", "RETURNED"}
@@ -269,6 +272,15 @@ def sync_transactions_for_account(
         events_granted += 1
         points_awarded += link_result.event.points
     db.commit()
+
+    try:
+        from app.services.vector_index import upsert_customer_embedding
+
+        upsert_customer_embedding(db, user.id)
+        db.commit()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Customer embedding refresh failed after sync: %s", exc)
+        db.rollback()
 
     return {
         "merchant_id": knot_merchant_id,

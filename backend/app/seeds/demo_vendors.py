@@ -12,9 +12,12 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+import logging
+
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
+from app.database import db_is_postgresql
 from app.models import (
     User,
     UserRole,
@@ -26,6 +29,8 @@ from app.models import (
     VendorProduct,
     VendorProfile,
 )
+
+logger = logging.getLogger(__name__)
 
 # Shared dev password for all demo vendor accounts (document in README only).
 DEMO_VENDOR_PASSWORD_PLAIN = "WiseBuysDemoVendor1!"
@@ -262,4 +267,16 @@ def seed_demo_vendors(db: Session) -> int:
         created += 1
 
     db.commit()
+
+    if db_is_postgresql(db):
+        try:
+            from app.services.vector_index import upsert_product_embedding
+
+            for row in db.query(VendorProduct.id).filter(VendorProduct.sku.like("DEMO-%")).all():
+                upsert_product_embedding(db, row[0])
+            db.commit()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Demo vendor product embeddings skipped: %s", exc)
+            db.rollback()
+
     return created

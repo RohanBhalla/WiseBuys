@@ -90,10 +90,22 @@ export interface VendorProductSummary {
   key_features: string[] | null;
 }
 
+export interface ComparablePurchase {
+  line_item_id: number | null;
+  name: string;
+  merchant_name: string | null;
+  unit_price: string | number | null;
+  total: string | number | null;
+  currency: string | null;
+  occurred_at: string | null;
+}
+
 export interface RecommendationItem {
   product: VendorProductSummary;
   score: number;
   reasons: string[];
+  insight: string;
+  comparable: ComparablePurchase | null;
   evidence_line_item_ids: number[];
 }
 

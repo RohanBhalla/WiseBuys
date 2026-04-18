@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.deps import get_current_customer, get_db
 from app.models import User
 from app.schemas.recommendations import (
+    ComparablePurchase,
     RecommendationItem,
     SpendingInsight,
     VendorProductSummary,
@@ -25,6 +26,20 @@ def my_recommendations(
             product=VendorProductSummary.model_validate(r.product),
             score=r.score,
             reasons=r.reasons,
+            insight=r.insight,
+            comparable=(
+                ComparablePurchase(
+                    line_item_id=r.comparable.line_item_id,
+                    name=r.comparable.name,
+                    merchant_name=r.comparable.merchant_name,
+                    unit_price=r.comparable.unit_price,
+                    total=r.comparable.total,
+                    currency=r.comparable.currency,
+                    occurred_at=r.comparable.occurred_at,
+                )
+                if r.comparable
+                else None
+            ),
             evidence_line_item_ids=r.evidence_line_item_ids,
         )
         for r in recs

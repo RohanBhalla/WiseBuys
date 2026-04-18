@@ -1,7 +1,11 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.deps import get_current_vendor, get_db
+
+logger = logging.getLogger(__name__)
 from app.models import User, VendorProduct, VendorProfile
 from app.schemas.catalog import VendorProductCreate, VendorProductPublic, VendorProductUpdate
 
@@ -46,6 +50,15 @@ def create_product(
     db.add(product)
     db.commit()
     db.refresh(product)
+    try:
+        from app.services.vector_index import upsert_product_embedding
+
+        upsert_product_embedding(db, product.id)
+        db.commit()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Product embedding refresh failed after create: %s", exc)
+        db.rollback()
+    db.refresh(product)
     return product
 
 
@@ -77,6 +90,15 @@ def update_product(
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(product, field, value)
     db.commit()
+    db.refresh(product)
+    try:
+        from app.services.vector_index import upsert_product_embedding
+
+        upsert_product_embedding(db, product.id)
+        db.commit()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Product embedding refresh failed after update: %s", exc)
+        db.rollback()
     db.refresh(product)
     return product
 

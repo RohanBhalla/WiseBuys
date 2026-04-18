@@ -330,6 +330,32 @@ function recIcon(category: string | null | undefined) {
   return ShoppingBag;
 }
 
+function formatPrice(value: string | number | null | undefined, currency?: string | null): string | null {
+  if (value === null || value === undefined || value === "") return null;
+  const n = typeof value === "string" ? Number(value) : value;
+  if (!Number.isFinite(n)) return null;
+  const code = (currency ?? "USD").toUpperCase();
+  if (code === "USD") {
+    return `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
+  return `${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${code}`;
+}
+
+function priceDelta(
+  altRaw: string | number | null | undefined,
+  compareRaw: string | number | null | undefined,
+): { kind: "cheaper" | "premium" | "even"; pct: number } | null {
+  if (altRaw == null || compareRaw == null) return null;
+  const alt = typeof altRaw === "string" ? Number(altRaw) : altRaw;
+  const cmp = typeof compareRaw === "string" ? Number(compareRaw) : compareRaw;
+  if (!Number.isFinite(alt) || !Number.isFinite(cmp) || cmp <= 0) return null;
+  const diff = alt - cmp;
+  const pct = (diff / cmp) * 100;
+  if (diff <= -0.5) return { kind: "cheaper", pct: Math.abs(pct) };
+  if (diff >= 0.5 && pct >= 8) return { kind: "premium", pct };
+  return { kind: "even", pct: Math.abs(pct) };
+}
+
 function RecommendationsFeed({ items, loading }: { items: RecommendationItem[]; loading: boolean }) {
   const [open, setOpen] = useState<string | null>(null);
 
@@ -367,7 +393,30 @@ function RecommendationsFeed({ items, loading }: { items: RecommendationItem[]; 
             const Icon = recIcon(r.product.category);
             const idKey = String(r.product.id);
             const isOpen = open === idKey;
-            const price = r.product.price_hint != null ? String(r.product.price_hint) : "—";
+            const altPrice = formatPrice(r.product.price_hint, r.product.currency);
+            const comparable = r.comparable;
+            const compPriceRaw =
+              comparable?.unit_price ?? comparable?.total ?? null;
+            const compPrice = comparable
+              ? formatPrice(compPriceRaw, comparable.currency ?? r.product.currency)
+              : null;
+            const delta = comparable
+              ? priceDelta(r.product.price_hint, compPriceRaw)
+              : null;
+            const deltaTone =
+              delta?.kind === "cheaper"
+                ? "text-forest"
+                : delta?.kind === "premium"
+                ? "text-terracotta"
+                : "text-charcoal/60";
+            const deltaLabel =
+              delta?.kind === "cheaper"
+                ? `${delta.pct.toFixed(0)}% cheaper`
+                : delta?.kind === "premium"
+                ? `${delta.pct.toFixed(0)}% premium`
+                : delta
+                ? "About the same price"
+                : null;
             return (
               <PaperCard key={idKey} className="p-0">
                 <div className="grid md:grid-cols-12 gap-0">
@@ -378,16 +427,41 @@ function RecommendationsFeed({ items, loading }: { items: RecommendationItem[]; 
                     </div>
                   </div>
                   <div className="md:col-span-5 p-6 border-b md:border-b-0 md:border-r border-charcoal/15">
-                    <div className="text-[0.65rem] uppercase tracking-widest text-charcoal/50">From your purchases</div>
-                    <div className="display-serif text-xl text-charcoal mt-1 line-through decoration-terracotta decoration-2">
-                      Similar to what you buy
+                    <div className="text-[0.65rem] uppercase tracking-widest text-charcoal/50">
+                      {comparable ? "You bought" : "From your purchases"}
                     </div>
-                    <div className="text-xs text-charcoal/55 mt-2 num-display">score {r.score.toFixed(1)}</div>
+                    {comparable ? (
+                      <>
+                        <div className="display-serif text-xl text-charcoal mt-1 leading-snug line-through decoration-terracotta decoration-2 decoration-[1.5px]">
+                          {comparable.name}
+                        </div>
+                        <div className="flex items-baseline gap-3 mt-2 flex-wrap">
+                          <div className="num-display text-charcoal/80 text-2xl">{compPrice ?? "—"}</div>
+                          {comparable.merchant_name && (
+                            <div className="text-[0.7rem] uppercase tracking-widest text-charcoal/55">
+                              {comparable.merchant_name}
+                            </div>
+                          )}
+                        </div>
+                        {deltaLabel && (
+                          <div className={`text-[0.7rem] mt-2 font-semibold tracking-wide ${deltaTone}`}>
+                            {deltaLabel}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <div className="display-serif text-xl text-charcoal mt-1 line-through decoration-terracotta decoration-2">
+                          Similar to what you buy
+                        </div>
+                        <div className="text-xs text-charcoal/55 mt-2 num-display">score {r.score.toFixed(1)}</div>
+                      </>
+                    )}
                   </div>
                   <div className="md:col-span-4 p-6 border-b md:border-b-0 md:border-r border-charcoal/15">
                     <div className="text-[0.65rem] uppercase tracking-widest text-terracotta">Aligned pick</div>
-                    <div className="display-serif text-xl text-charcoal mt-1">{r.product.name}</div>
-                    <div className="num-display text-charcoal text-2xl mt-2">{price}</div>
+                    <div className="display-serif text-xl text-charcoal mt-1 leading-snug">{r.product.name}</div>
+                    <div className="num-display text-charcoal text-2xl mt-2">{altPrice ?? "—"}</div>
                     <div className="mt-3 flex flex-wrap gap-1.5">
                       {r.product.key_features?.slice(0, 3).map((f) => (
                         <Stamp key={f} color="forest" className="!text-[0.6rem]">
@@ -420,13 +494,25 @@ function RecommendationsFeed({ items, loading }: { items: RecommendationItem[]; 
                       <div className="md:col-span-3">
                         <Eyebrow>Reasoning</Eyebrow>
                         <div className="display-serif text-charcoal text-lg mt-1">The case</div>
+                        <div className="text-[0.65rem] uppercase tracking-widest text-charcoal/50 mt-3 num-display">
+                          match score {r.score.toFixed(1)}
+                        </div>
                       </div>
-                      <div className="md:col-span-9 text-sm text-charcoal/80 leading-relaxed space-y-2">
-                        {r.reasons.map((line) => (
-                          <p key={line}>{line}</p>
-                        ))}
-                        {r.evidence_line_item_ids.length > 0 && (
-                          <p className="text-xs text-charcoal/55 num-display">Evidence line items: {r.evidence_line_item_ids.join(", ")}</p>
+                      <div className="md:col-span-9 text-sm text-charcoal/80 leading-relaxed space-y-3">
+                        {r.insight && (
+                          <p className="text-charcoal text-base leading-relaxed">{r.insight}</p>
+                        )}
+                        {r.reasons.length > 0 && (
+                          <ul className="space-y-1.5 pt-1">
+                            {r.reasons.map((line) => (
+                              <li
+                                key={line}
+                                className="text-charcoal/75 text-xs uppercase tracking-wider before:content-['§'] before:text-terracotta before:mr-2"
+                              >
+                                {line}
+                              </li>
+                            ))}
+                          </ul>
                         )}
                       </div>
                     </div>

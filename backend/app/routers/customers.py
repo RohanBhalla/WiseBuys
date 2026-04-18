@@ -1,7 +1,11 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.deps import get_current_customer, get_db
+
+logger = logging.getLogger(__name__)
 from app.models import CustomerProfile, CustomerSecondaryFocus, User, ValueTag
 from app.schemas.customer import CustomerProfilePublic, CustomerProfileUpdate
 from app.services.rewards import grant_onboarding_complete_if_eligible
@@ -66,5 +70,16 @@ def update_my_profile(
     db.commit()
     grant_onboarding_complete_if_eligible(db, user=user)
     db.commit()
+    db.refresh(profile)
+
+    try:
+        from app.services.vector_index import upsert_customer_embedding
+
+        upsert_customer_embedding(db, user.id)
+        db.commit()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Customer embedding refresh failed after profile update: %s", exc)
+        db.rollback()
+
     db.refresh(profile)
     return profile

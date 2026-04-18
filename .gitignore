@@ -37,6 +37,9 @@ backend/.mypy_cache/
 backend/.ruff_cache/
 backend/**/*.db
 backend/**/*.sqlite3
+backend/**/*.db-journal
+backend/**/*.db-wal
+backend/**/*.db-shm
 backend/dist/
 backend/build/
 backend/**/*.egg-info/

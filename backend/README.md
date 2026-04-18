@@ -15,10 +15,12 @@ This first slice ships **only the backend** with:
   `UPDATED_TRANSACTIONS_AVAILABLE`, `ACCOUNT_LOGIN_REQUIRED`) with
   HMAC-SHA256 signature verification, cursor-paginated `Sync Transactions`,
   and normalized purchases / line items
-- **Recommendation engine (rules-based v0)** ranking approved vendor
-  products by overlap with the customer's primary/secondary focus tags
-  and token similarity to recent Knot line items, with human-readable
-  reasons + line-item evidence
+- **Recommendation engine (hybrid on Postgres)** — with `DATABASE_URL`
+  pointing at **Postgres + pgvector** and `GEMINI_API_KEY` set, ranked
+  products use **Gemini `gemini-embedding-001`** (768-d, asymmetric
+  `RETRIEVAL_DOCUMENT` / `RETRIEVAL_QUERY`) plus tag overlap, category
+  heuristics, token overlap evidence, and optional recency. On **SQLite**
+  (default dev), the same API falls back to the **rules-only v0** engine.
 - **Spending insights** aggregated per merchant from Knot purchases
 - **Rewards ledger** (append-only `reward_events` with idempotent dedupe
   keys) with automatic earn rules:
@@ -138,6 +140,23 @@ pytest
 - For Postgres set `DATABASE_URL=postgresql+psycopg://...` in `.env`.
 - Alembic is wired (`alembic/`); the app also calls `Base.metadata.create_all` on
   startup so SQLite dev works without running migrations.
+
+### Vector embeddings (Gemini + pgvector)
+
+**Postgres (recommended for production ANN index):**
+
+1. Create DB and enable extension: `CREATE EXTENSION IF NOT EXISTS vector;`
+2. Run migrations: `alembic upgrade head` (adds `embedding` / `embedding_signature` /
+   `embedded_at` on `vendor_products` and `customer_profiles`).
+
+**SQLite (local dev):** embedding columns are added on startup when missing; no Alembic step.
+
+**All backends:** set `GEMINI_API_KEY` in `.env`. After Knot sync or catalog changes, vectors
+refresh automatically; to backfill published products + all customer profiles once:
+
+```bash
+PYTHONPATH=. python -m app.scripts.embed_backfill
+```
 
 ## Project structure
 

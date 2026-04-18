@@ -1,3 +1,4 @@
+from datetime import datetime
 from decimal import Decimal
 
 from pydantic import BaseModel
@@ -16,10 +17,22 @@ class VendorProductSummary(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ComparablePurchase(BaseModel):
+    line_item_id: int | None = None
+    name: str
+    merchant_name: str | None = None
+    unit_price: Decimal | None = None
+    total: Decimal | None = None
+    currency: str | None = None
+    occurred_at: datetime | None = None
+
+
 class RecommendationItem(BaseModel):
     product: VendorProductSummary
     score: float
     reasons: list[str]
+    insight: str = ""
+    comparable: ComparablePurchase | None = None
     evidence_line_item_ids: list[int]
 
 
