@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.deps import get_current_customer, get_db
 from app.models import RecommendationClick, User, VendorProduct
+from app.models.vendor import VendorAllowedTag, VendorProfile
 from app.schemas.recommendations import (
     ComparablePurchase,
     RecommendationClickCreate,
@@ -11,7 +12,25 @@ from app.schemas.recommendations import (
     SpendingInsight,
     VendorProductSummary,
 )
+from app.schemas.tag import TagPublic
 from app.services.recommendations import recommend_for_user, spending_insights
+
+
+def _vendor_tags_by_user_id(db: Session, vendor_user_ids: list[int]) -> dict[int, list[TagPublic]]:
+    """Map vendor user_id → approved tags (VendorAllowedTag) for UI value chips."""
+    if not vendor_user_ids:
+        return {}
+    rows = (
+        db.query(VendorProfile)
+        .options(selectinload(VendorProfile.allowed_tags).selectinload(VendorAllowedTag.tag))
+        .filter(VendorProfile.user_id.in_(vendor_user_ids))
+        .all()
+    )
+    out: dict[int, list[TagPublic]] = {}
+    for vp in rows:
+        raw = [link.tag for link in vp.allowed_tags if getattr(link, "tag", None)]
+        out[vp.user_id] = [TagPublic.model_validate(t) for t in raw]
+    return out
 
 router = APIRouter(prefix="/api/recommendations", tags=["recommendations"])
 
@@ -23,9 +42,13 @@ def my_recommendations(
     limit: int = Query(default=10, ge=1, le=50),
 ) -> list[RecommendationItem]:
     recs = recommend_for_user(db, user, limit=limit)
+    v_ids = list({r.product.vendor_user_id for r in recs})
+    vendor_tag_map = _vendor_tags_by_user_id(db, v_ids)
     return [
         RecommendationItem(
-            product=VendorProductSummary.model_validate(r.product),
+            product=VendorProductSummary.model_validate(r.product).model_copy(
+                update={"vendor_tags": vendor_tag_map.get(r.product.vendor_user_id, [])}
+            ),
             score=r.score,
             reasons=r.reasons,
             insight=r.insight,

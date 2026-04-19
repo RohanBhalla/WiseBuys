@@ -28,6 +28,24 @@ import type {
   TagPublic,
 } from "@/lib/types";
 
+/** Icons aligned with Preferences & Values toggles (slug → Lucide). */
+function iconForValueSlug(slug: string): typeof Leaf | null {
+  switch (slug) {
+    case "sustainability":
+      return Leaf;
+    case "local":
+      return MapPin;
+    case "black_owned":
+      return Users;
+    case "women_owned":
+      return Sparkles;
+    case "ethically_sourced":
+      return ShoppingBag;
+    default:
+      return null;
+  }
+}
+
 export const Route = createFileRoute("/dashboard/")({
   head: () => ({
     meta: [{ title: "Dashboard — WiseBuys" }],
@@ -195,7 +213,7 @@ function CustomerDashboard() {
         accountsLoading={accountsQ.isLoading}
       />
       <Stats merchantCount={merchantCount} balance={balance} totalSpent={totalSpent} recCount={recsQ.data?.length ?? 0} />
-      <RecommendationsFeed items={recsQ.data ?? []} loading={recsQ.isLoading} />
+      <RecommendationsFeed items={recsQ.data ?? []} loading={recsQ.isLoading} profile={profileQ.data} />
       <RewardsAndValues
         balance={balance}
         vendorPoints={vendorPoints}
@@ -331,6 +349,16 @@ function recIcon(category: string | null | undefined) {
   return ShoppingBag;
 }
 
+/** Per-product tags plus vendor-approved tags, deduped by id (for value chips + filters). */
+function mergedValueTags(product: { tags?: TagPublic[]; vendor_tags?: TagPublic[] }): TagPublic[] {
+  const m = new Map<number, TagPublic>();
+  for (const t of product.tags ?? []) m.set(t.id, t);
+  for (const t of product.vendor_tags ?? []) {
+    if (!m.has(t.id)) m.set(t.id, t);
+  }
+  return [...m.values()].sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+}
+
 function parsePriceHint(value: string | number | null | undefined): number | null {
   if (value === null || value === undefined || value === "") return null;
   const n = typeof value === "string" ? Number(value) : value;
@@ -382,11 +410,27 @@ function priceDelta(
   return { kind: "even", pct: Math.abs(pct) };
 }
 
-function RecommendationsFeed({ items, loading }: { items: RecommendationItem[]; loading: boolean }) {
+function RecommendationsFeed({
+  items,
+  loading,
+  profile,
+}: {
+  items: RecommendationItem[];
+  loading: boolean;
+  profile: CustomerProfilePublic | undefined;
+}) {
   const [open, setOpen] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [priceBucket, setPriceBucket] = useState<PriceBucket>("all");
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  /** Filter by platform value-tag slugs (same tags as Preferences & Values). */
+  const [selectedTagSlugs, setSelectedTagSlugs] = useState<string[]>([]);
+
+  const userTagIds = useMemo(() => {
+    const s = new Set<number>();
+    if (profile?.primary_focus) s.add(profile.primary_focus.id);
+    for (const t of profile?.secondary_focuses ?? []) s.add(t.id);
+    return s;
+  }, [profile]);
 
   const categoryOptions = useMemo(() => {
     const seen = new Set<string>();
@@ -402,33 +446,30 @@ function RecommendationsFeed({ items, loading }: { items: RecommendationItem[]; 
     return labels.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
   }, [items]);
 
-  const tagOptions = useMemo(() => {
-    const byLower = new Map<string, string>();
+  const valueTagOptions = useMemo(() => {
+    const byId = new Map<number, TagPublic>();
     for (const r of items) {
-      for (const f of r.product.key_features ?? []) {
-        const t = f.trim();
-        if (!t) continue;
-        const k = t.toLowerCase();
-        if (!byLower.has(k)) byLower.set(k, t);
+      for (const t of mergedValueTags(r.product)) {
+        if (!byId.has(t.id)) byId.set(t.id, t);
       }
     }
-    return [...byLower.values()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+    return [...byId.values()].sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
   }, [items]);
 
   const filteredItems = useMemo(() => {
     const catNorm = categoryFilter === "all" ? null : categoryFilter.trim().toLowerCase();
-    const tagSet = new Set(selectedTags.map((t) => t.toLowerCase()));
+    const slugSet = new Set(selectedTagSlugs);
     return items.filter((r) => {
       if (catNorm) {
         const pc = (r.product.category ?? "").trim().toLowerCase();
         if (pc !== catNorm) return false;
       }
       if (!priceInBucket(parsePriceHint(r.product.price_hint), priceBucket)) return false;
-      if (tagSet.size > 0) {
-        const feats = new Set((r.product.key_features ?? []).map((f) => f.trim().toLowerCase()).filter(Boolean));
+      if (slugSet.size > 0) {
+        const productSlugs = new Set(mergedValueTags(r.product).map((t) => t.slug));
         let has = false;
-        for (const t of tagSet) {
-          if (feats.has(t)) {
+        for (const slug of slugSet) {
+          if (productSlugs.has(slug)) {
             has = true;
             break;
           }
@@ -437,10 +478,10 @@ function RecommendationsFeed({ items, loading }: { items: RecommendationItem[]; 
       }
       return true;
     });
-  }, [items, categoryFilter, priceBucket, selectedTags]);
+  }, [items, categoryFilter, priceBucket, selectedTagSlugs]);
 
   const filtersActive =
-    categoryFilter !== "all" || priceBucket !== "all" || selectedTags.length > 0;
+    categoryFilter !== "all" || priceBucket !== "all" || selectedTagSlugs.length > 0;
 
   useEffect(() => {
     if (open && !filteredItems.some((r) => String(r.product.id) === open)) {
@@ -463,16 +504,16 @@ function RecommendationsFeed({ items, loading }: { items: RecommendationItem[]; 
     }
   };
 
-  const toggleTag = (tag: string) => {
-    setSelectedTags((prev) =>
-      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
+  const toggleTagSlug = (slug: string) => {
+    setSelectedTagSlugs((prev) =>
+      prev.includes(slug) ? prev.filter((s) => s !== slug) : [...prev, slug],
     );
   };
 
   const clearFilters = () => {
     setCategoryFilter("all");
     setPriceBucket("all");
-    setSelectedTags([]);
+    setSelectedTagSlugs([]);
   };
 
   return (
@@ -482,6 +523,11 @@ function RecommendationsFeed({ items, loading }: { items: RecommendationItem[]; 
           <div>
             <SectionLabel number="B" label="Recommendations" />
             <h2 className="display-serif text-3xl sm:text-4xl text-charcoal mt-3">Live picks from your values + history.</h2>
+            <p className="mt-2 text-sm text-charcoal/65 max-w-2xl">
+              Each pick lists <strong className="font-semibold text-charcoal/85">value tags</strong> from the product and the
+              brand’s approved tags (same categories as <span className="whitespace-nowrap">Preferences &amp; Values</span>
+              ). Tags in <span className="text-terracotta font-medium">terracotta</span> match a focus on your profile.
+            </p>
           </div>
         </div>
 
@@ -541,29 +587,29 @@ function RecommendationsFeed({ items, loading }: { items: RecommendationItem[]; 
                   <option value="over100">$100+</option>
                 </select>
               </label>
-              {tagOptions.length > 0 && (
+              {valueTagOptions.length > 0 && (
                 <div className="flex flex-col gap-2 flex-1 min-w-[min(100%,18rem)]">
-                  <span className="text-[0.65rem] uppercase tracking-widest text-charcoal/50">Tags</span>
+                  <span className="text-[0.65rem] uppercase tracking-widest text-charcoal/50">Value tags</span>
                   <div className="flex flex-wrap gap-2">
-                    {tagOptions.map((tag) => {
-                      const on = selectedTags.includes(tag);
+                    {valueTagOptions.map((tag) => {
+                      const on = selectedTagSlugs.includes(tag.slug);
                       return (
                         <button
-                          key={tag}
+                          key={tag.id}
                           type="button"
-                          onClick={() => toggleTag(tag)}
+                          onClick={() => toggleTagSlug(tag.slug)}
                           className={`text-[0.65rem] uppercase tracking-wider px-2.5 py-1 rounded-sm border transition-colors ${
                             on
                               ? "border-forest bg-forest/10 text-forest font-semibold"
                               : "border-charcoal/20 text-charcoal/70 hover:border-terracotta/50 hover:text-charcoal"
                           }`}
                         >
-                          {tag}
+                          {tag.label}
                         </button>
                       );
                     })}
                   </div>
-                  <p className="text-[0.65rem] text-charcoal/45">Match any selected tag.</p>
+                  <p className="text-[0.65rem] text-charcoal/45">Show picks that carry any selected value tag.</p>
                 </div>
               )}
             </div>
@@ -614,6 +660,7 @@ function RecommendationsFeed({ items, loading }: { items: RecommendationItem[]; 
                 : delta
                 ? "About the same price"
                 : null;
+            const valueTags = mergedValueTags(r.product);
             return (
               <PaperCard key={idKey} className="p-0">
                 <div className="grid md:grid-cols-12 gap-0">
@@ -659,13 +706,39 @@ function RecommendationsFeed({ items, loading }: { items: RecommendationItem[]; 
                         {deltaLabel}
                       </div>
                     )}
-                    <div className="mt-3 flex flex-wrap gap-1.5">
-                      {r.product.key_features?.slice(0, 3).map((f) => (
-                        <Stamp key={f} color="forest" className="!text-[0.6rem]">
-                          {f}
-                        </Stamp>
-                      ))}
-                    </div>
+                    {valueTags.length > 0 && (
+                      <div className="mt-3">
+                        <div className="text-[0.6rem] uppercase tracking-widest text-charcoal/45 mb-1.5">Value tags</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {valueTags.map((t) => {
+                            const matchesUser = userTagIds.has(t.id);
+                            const Icon = iconForValueSlug(t.slug);
+                            return (
+                              <Stamp
+                                key={t.id}
+                                color={matchesUser ? "terracotta" : "forest"}
+                                className="!text-[0.6rem] inline-flex items-center gap-1"
+                              >
+                                {Icon ? <Icon className="h-3 w-3 shrink-0 opacity-90" aria-hidden /> : null}
+                                {t.label}
+                              </Stamp>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    {(r.product.key_features?.length ?? 0) > 0 && (
+                      <div className="mt-3">
+                        <div className="text-[0.6rem] uppercase tracking-widest text-charcoal/45 mb-1.5">Highlights</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {r.product.key_features?.slice(0, 4).map((f) => (
+                            <Stamp key={f} color="charcoal" className="!text-[0.6rem]">
+                              {f}
+                            </Stamp>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <div className="md:col-span-2 p-6 flex flex-col justify-between gap-3">
                     <button

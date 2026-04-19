@@ -89,7 +89,10 @@ export interface VendorProductSummary {
   price_hint: string | number | null;
   differentiator: string | null;
   key_features: string[] | null;
+  /** Per-product value tags (VendorProductTag). */
   tags: TagPublic[];
+  /** Vendor’s approved tags when the SKU has no product-level tags (or merged in UI). */
+  vendor_tags?: TagPublic[];
 }
 
 export interface ComparablePurchase {

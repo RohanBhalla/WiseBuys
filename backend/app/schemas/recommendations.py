@@ -17,6 +17,9 @@ class VendorProductSummary(BaseModel):
     differentiator: str | None = None
     key_features: list[str] | None = None
     tags: list[TagPublic] = []
+    # Approved tags for the vendor (VendorAllowedTag). Shown when a SKU has no
+    # per-product tags so recommendations still surface value alignment.
+    vendor_tags: list[TagPublic] = []
 
     model_config = {"from_attributes": True}
 
@@ -39,6 +42,7 @@ class VendorProductSummary(BaseModel):
             "differentiator": data.differentiator,
             "key_features": data.key_features,
             "tags": tags,
+            "vendor_tags": [],
         }
 
 
