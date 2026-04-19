@@ -3,6 +3,8 @@ import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/r
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/lib/auth";
 import { AppQueryProvider } from "@/lib/query";
+import appleTouchIcon from "../assets/apple-touch-icon.png?url";
+import favicon32 from "../assets/favicon-32.png?url";
 import appCss from "../styles.css?url";
 
 function NotFoundComponent() {
@@ -40,6 +42,8 @@ export const Route = createRootRoute({
       { name: "twitter:card", content: "summary_large_image" },
     ],
     links: [
+      { rel: "icon", type: "image/png", sizes: "32x32", href: favicon32 },
+      { rel: "apple-touch-icon", href: appleTouchIcon },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
