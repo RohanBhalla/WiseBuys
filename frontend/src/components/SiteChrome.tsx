@@ -6,13 +6,33 @@ import { useAuth } from "@/lib/auth";
 
 const publicLinks = [{ to: "/", label: "Home" }] as const;
 
+/** Whether `pathname` should show the active state for a nav target `to`. */
+function isNavActive(pathname: string, to: string): boolean {
+  if (to === "/") {
+    return pathname === "/" || pathname === "";
+  }
+  if (to === "/dashboard") {
+    return pathname === "/dashboard" || pathname === "/dashboard/";
+  }
+  if (to === "/dashboard/connect") {
+    return pathname === "/dashboard/connect" || pathname.startsWith("/dashboard/connect/");
+  }
+  if (to === "/vendor") {
+    return pathname === "/vendor" || pathname === "/vendor/" || pathname.startsWith("/vendor/");
+  }
+  return pathname === to || pathname === `${to}/`;
+}
+
 export function SiteHeader() {
   const location = useLocation();
   const [open, setOpen] = useState(false);
   const auth = useAuth();
   const roleLinks: { to: string; label: string }[] =
     auth.role === "customer"
-      ? [{ to: "/dashboard", label: "Dashboard" }]
+      ? [
+          { to: "/dashboard", label: "Dashboard" },
+          { to: "/dashboard/connect", label: "Link purchases" },
+        ]
       : auth.role === "vendor"
         ? [{ to: "/vendor", label: "Vendor" }]
         : [];
@@ -32,7 +52,7 @@ export function SiteHeader() {
 
         <nav className="hidden md:flex items-center gap-8">
           {publicLinks.map((l) => {
-            const active = location.pathname === l.to;
+            const active = isNavActive(location.pathname, l.to);
             return (
               <Link
                 key={l.to}
@@ -47,12 +67,7 @@ export function SiteHeader() {
             );
           })}
           {roleLinks.map((l) => {
-            const active =
-              l.to === "/dashboard"
-                ? location.pathname === "/dashboard" || location.pathname.startsWith("/dashboard/")
-                : l.to === "/vendor"
-                  ? location.pathname === "/vendor" || location.pathname.startsWith("/vendor/")
-                  : location.pathname === l.to;
+            const active = isNavActive(location.pathname, l.to);
             return (
               <Link
                 key={l.to}
@@ -75,14 +90,6 @@ export function SiteHeader() {
             </Link>
           ) : (
             <>
-              {auth.role === "customer" && (
-                <Link
-                  to="/dashboard/connect"
-                  className="text-sm font-medium text-charcoal/75 hover:text-charcoal tracking-wide"
-                >
-                  Link purchases
-                </Link>
-              )}
               <button
                 type="button"
                 onClick={() => auth.logout()}
@@ -105,16 +112,21 @@ export function SiteHeader() {
 
       {open && (
         <div className="md:hidden border-t border-charcoal/15 bg-cream px-5 py-4 space-y-3">
-          {[...publicLinks, ...roleLinks].map((l) => (
-            <Link
-              key={l.to}
-              to={l.to}
-              onClick={() => setOpen(false)}
-              className="block text-base font-medium text-charcoal/85"
-            >
-              {l.label}
-            </Link>
-          ))}
+          {[...publicLinks, ...roleLinks].map((l) => {
+            const active = isNavActive(location.pathname, l.to);
+            return (
+              <Link
+                key={l.to}
+                to={l.to}
+                onClick={() => setOpen(false)}
+                className={`block text-base font-medium ${
+                  active ? "text-terracotta border-l-2 border-terracotta pl-2 -ml-0.5" : "text-charcoal/85"
+                }`}
+              >
+                {l.label}
+              </Link>
+            );
+          })}
           {!auth.token ? (
             <Link
               to="/login"
@@ -125,15 +137,6 @@ export function SiteHeader() {
             </Link>
           ) : (
             <>
-              {auth.role === "customer" && (
-                <Link
-                  to="/dashboard/connect"
-                  onClick={() => setOpen(false)}
-                  className="block text-base font-medium text-charcoal/85"
-                >
-                  Link purchases
-                </Link>
-              )}
               <button
                 type="button"
                 onClick={() => {
