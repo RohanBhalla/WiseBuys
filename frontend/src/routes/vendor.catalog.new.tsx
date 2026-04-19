@@ -1,11 +1,11 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 import { PaperCard, Eyebrow, SectionLabel } from "@/components/Primitives";
 import { apiFetch, ApiError } from "@/lib/api";
 import { useRequireRole } from "@/lib/auth";
-import type { VendorProductPublic } from "@/lib/types";
+import type { VendorProductPublic, VendorProfilePublic } from "@/lib/types";
 
 export const Route = createFileRoute("/vendor/catalog/new")({
   head: () => ({
@@ -25,6 +25,18 @@ function NewProductPage() {
   const [differentiator, setDifferentiator] = useState("");
   const [keyFeatures, setKeyFeatures] = useState("");
   const [isPublished, setIsPublished] = useState(false);
+  const [tagIds, setTagIds] = useState<number[]>([]);
+
+  const profileQ = useQuery({
+    queryKey: ["vendor", "me"],
+    queryFn: () => apiFetch<VendorProfilePublic>("/api/vendors/me"),
+    enabled: auth.ready && !!auth.token,
+    retry: false,
+  });
+  const allowedTags = profileQ.data?.allowed_tags ?? [];
+
+  const toggleTag = (id: number) =>
+    setTagIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
   const saveM = useMutation({
     mutationFn: () =>
@@ -42,6 +54,7 @@ function NewProductPage() {
             .map((s) => s.trim())
             .filter(Boolean),
           is_published: isPublished,
+          tag_ids: tagIds,
         }),
       }),
     onSuccess: (p) => {
@@ -97,6 +110,37 @@ function NewProductPage() {
             Key features (one per line)
             <textarea value={keyFeatures} onChange={(e) => setKeyFeatures(e.target.value)} rows={4} className="mt-1.5 w-full border border-charcoal/15 rounded-sm bg-cream-deep px-3 py-2.5 text-sm" />
           </label>
+          <div>
+            <Eyebrow>Value tags</Eyebrow>
+            <p className="mt-1 text-xs text-charcoal/60">
+              Pick the values this specific product is verified for. Only your approved allow-list shows.
+            </p>
+            {allowedTags.length === 0 ? (
+              <p className="mt-3 text-xs text-charcoal/55 italic">
+                No allowed tags yet. Ask an admin to expand your application's allow-list.
+              </p>
+            ) : (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {allowedTags.map((t) => {
+                  const active = tagIds.includes(t.id);
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => toggleTag(t.id)}
+                      className={`text-[0.65rem] uppercase tracking-widest font-semibold px-3 py-1.5 rounded-sm border transition-colors ${
+                        active
+                          ? "bg-terracotta text-cream border-terracotta"
+                          : "bg-cream-deep text-charcoal border-charcoal/20 hover:border-terracotta hover:text-terracotta"
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
           <label className="flex items-center gap-2 text-sm text-charcoal cursor-pointer">
             <input type="checkbox" checked={isPublished} onChange={(e) => setIsPublished(e.target.checked)} className="accent-terracotta" />
             Published

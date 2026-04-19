@@ -1,7 +1,10 @@
 from datetime import datetime
 from decimal import Decimal
+from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
+
+from app.schemas.tag import TagPublic
 
 
 class VendorProductSummary(BaseModel):
@@ -13,8 +16,30 @@ class VendorProductSummary(BaseModel):
     price_hint: Decimal | None = None
     differentiator: str | None = None
     key_features: list[str] | None = None
+    tags: list[TagPublic] = []
 
     model_config = {"from_attributes": True}
+
+    @model_validator(mode="before")
+    @classmethod
+    def _flatten_tag_links(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            return data
+        links = getattr(data, "tag_links", None)
+        if links is None:
+            return data
+        tags = [link.tag for link in links if getattr(link, "tag", None)]
+        return {
+            "id": data.id,
+            "vendor_user_id": data.vendor_user_id,
+            "name": data.name,
+            "category": data.category,
+            "currency": data.currency,
+            "price_hint": data.price_hint,
+            "differentiator": data.differentiator,
+            "key_features": data.key_features,
+            "tags": tags,
+        }
 
 
 class ComparablePurchase(BaseModel):

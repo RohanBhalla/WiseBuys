@@ -19,6 +19,7 @@ from app.models import (
     User,
     VendorAllowedTag,
     VendorProduct,
+    VendorProductTag,
     VendorProfile,
 )
 
@@ -57,6 +58,10 @@ PRIMARY_WEIGHT = 3.0
 SECONDARY_WEIGHT = 1.0
 TOKEN_OVERLAP_WEIGHT = 0.5
 CATEGORY_MATCH_WEIGHT = 1.5
+# Per-product tag bonuses sit slightly above the vendor-level allow-list signal
+# because the vendor explicitly stamped this product with the tag.
+PRODUCT_TAG_PRIMARY_WEIGHT = 1.5
+PRODUCT_TAG_SECONDARY_WEIGHT = 0.6
 EVIDENCE_LIMIT = 3
 
 
@@ -165,6 +170,19 @@ def _allowed_labels_by_id(vendor: VendorProfile | None) -> dict[int, str]:
     return out
 
 
+def _product_tag_ids(product: VendorProduct) -> set[int]:
+    return {link.tag_id for link in getattr(product, "tag_links", []) or [] if link.tag_id}
+
+
+def _product_tag_labels_by_id(product: VendorProduct) -> dict[int, str]:
+    out: dict[int, str] = {}
+    for link in getattr(product, "tag_links", []) or []:
+        tag = getattr(link, "tag", None)
+        if tag and tag.label:
+            out[link.tag_id] = tag.label
+    return out
+
+
 def _format_money(value: float | None, currency: str | None) -> str | None:
     if value is None:
         return None
@@ -235,6 +253,7 @@ def _build_insight(
     primary_label: str | None,
     secondary_labels: list[str],
     matched_vendor_labels: list[str],
+    matched_product_labels: list[str] | None = None,
     vec_sim: float | None = None,
     token_hits: int = 0,
 ) -> str:
@@ -312,9 +331,15 @@ def _build_insight(
     aligned.extend(l for l in secondary_labels if l != primary_label)
     aligned = aligned[:3]
 
+    product_matched = [l for l in (matched_product_labels or []) if l]
     matched = [l for l in matched_vendor_labels if l]
-    if aligned and matched:
-        # Prefer to mention the labels the vendor is actually verified for.
+
+    if product_matched:
+        # Per-product stamps trump vendor-wide allow-lists in the narrative.
+        sentences.append(
+            f"This specific product is stamped for {_humanize_list(product_matched[:3])}, the values you flagged on your profile."
+        )
+    elif aligned and matched:
         overlap_first = [l for l in aligned if l in matched]
         rest = [l for l in aligned if l not in matched]
         ordered = overlap_first + rest
@@ -388,7 +413,12 @@ def recommend_for_user_rules_only(
     category_counts: Counter[str] = Counter(cat for _, cat, _ in line_item_tokens if cat)
     dominant_categories = {cat for cat, _ in category_counts.most_common(3)}
 
-    products = db.query(VendorProduct).filter(VendorProduct.is_published.is_(True)).all()
+    products = (
+        db.query(VendorProduct)
+        .options(selectinload(VendorProduct.tag_links).selectinload(VendorProductTag.tag))
+        .filter(VendorProduct.is_published.is_(True))
+        .all()
+    )
 
     vendor_user_ids = {p.vendor_user_id for p in products}
     vendor_profiles_by_user = {}
@@ -433,6 +463,28 @@ def recommend_for_user_rules_only(
                 if lbl and lbl not in matched_vendor_labels:
                     matched_vendor_labels.append(lbl)
 
+        product_tag_ids = _product_tag_ids(product)
+        product_tag_labels = _product_tag_labels_by_id(product)
+        matched_product_labels: list[str] = []
+        if primary_tag_id and primary_tag_id in product_tag_ids:
+            score += PRODUCT_TAG_PRIMARY_WEIGHT
+            lbl = product_tag_labels.get(primary_tag_id)
+            if lbl:
+                matched_product_labels.append(lbl)
+            reasons.append(
+                f"Tagged for your primary focus{f' ({lbl})' if lbl else ''}"
+            )
+        product_secondary_overlap = secondary_tag_ids & product_tag_ids
+        if product_secondary_overlap:
+            score += PRODUCT_TAG_SECONDARY_WEIGHT * len(product_secondary_overlap)
+            reasons.append(
+                f"Tagged for {len(product_secondary_overlap)} of your other focuses"
+            )
+            for tid in product_secondary_overlap:
+                lbl = product_tag_labels.get(tid)
+                if lbl and lbl not in matched_product_labels:
+                    matched_product_labels.append(lbl)
+
         product_tokens = _tokenize(product.name) | _tokenize(product.category)
         evidence_ids: list[int] = []
         token_hits = 0
@@ -462,6 +514,7 @@ def recommend_for_user_rules_only(
             primary_label=primary_label,
             secondary_labels=secondary_labels,
             matched_vendor_labels=matched_vendor_labels,
+            matched_product_labels=matched_product_labels,
             vec_sim=None,
             token_hits=token_hits,
         )
@@ -543,7 +596,10 @@ def recommend_for_user_hybrid(
     q = (
         db.query(VendorProduct, VendorProfile)
         .join(VendorProfile, VendorProfile.user_id == VendorProduct.vendor_user_id)
-        .options(selectinload(VendorProfile.allowed_tags).selectinload(VendorAllowedTag.tag))
+        .options(
+            selectinload(VendorProfile.allowed_tags).selectinload(VendorAllowedTag.tag),
+            selectinload(VendorProduct.tag_links).selectinload(VendorProductTag.tag),
+        )
         .filter(VendorProduct.is_published.is_(True))
         .filter(VendorProduct.embedding.isnot(None))
     )
@@ -599,6 +655,28 @@ def recommend_for_user_hybrid(
                 if lbl and lbl not in matched_vendor_labels:
                     matched_vendor_labels.append(lbl)
 
+        product_tag_ids = _product_tag_ids(product)
+        product_tag_labels = _product_tag_labels_by_id(product)
+        matched_product_labels: list[str] = []
+        if primary_tag_id and primary_tag_id in product_tag_ids:
+            score += PRODUCT_TAG_PRIMARY_WEIGHT
+            lbl = product_tag_labels.get(primary_tag_id)
+            if lbl:
+                matched_product_labels.append(lbl)
+            reasons.append(
+                f"Tagged for your primary focus{f' ({lbl})' if lbl else ''}"
+            )
+        product_secondary_overlap = secondary_tag_ids & product_tag_ids
+        if product_secondary_overlap:
+            score += PRODUCT_TAG_SECONDARY_WEIGHT * len(product_secondary_overlap)
+            reasons.append(
+                f"Tagged for {len(product_secondary_overlap)} of your other focuses"
+            )
+            for tid in product_secondary_overlap:
+                lbl = product_tag_labels.get(tid)
+                if lbl and lbl not in matched_product_labels:
+                    matched_product_labels.append(lbl)
+
         product_tokens = _tokenize(product.name) | _tokenize(product.category)
         evidence_ids: list[int] = []
         token_hits = 0
@@ -636,6 +714,7 @@ def recommend_for_user_hybrid(
             primary_label=primary_label,
             secondary_labels=secondary_labels,
             matched_vendor_labels=matched_vendor_labels,
+            matched_product_labels=matched_product_labels,
             vec_sim=vec_sim,
             token_hits=token_hits,
         )

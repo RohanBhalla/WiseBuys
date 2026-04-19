@@ -1,5 +1,5 @@
 from app.models.analytics import RecommendationClick
-from app.models.catalog import VendorProduct
+from app.models.catalog import VendorProduct, VendorProductTag
 from app.models.customer import CustomerProfile, CustomerSecondaryFocus
 from app.models.knot import KnotLineItem, KnotMerchantAccount, KnotPurchase
 from app.models.rewards import RewardEvent, RewardEventType
@@ -30,5 +30,6 @@ __all__ = [
     "VendorApplicationStatus",
     "VendorApplicationTag",
     "VendorProduct",
+    "VendorProductTag",
     "VendorProfile",
 ]

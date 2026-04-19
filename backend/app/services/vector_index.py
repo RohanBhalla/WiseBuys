@@ -16,6 +16,7 @@ from app.models import (
     KnotLineItem,
     KnotPurchase,
     VendorProduct,
+    VendorProductTag,
     VendorProfile,
 )
 from app.models.vendor import VendorAllowedTag
@@ -52,13 +53,26 @@ def build_product_text(product: VendorProduct, vendor: VendorProfile | None) -> 
         if isinstance(feats, list) and feats:
             joined = ", ".join(str(f) for f in feats[:16])
             parts.append(f"Key features: {joined}")
+
+    # Per-product tags get top billing in the embedding text because they're
+    # the vendor's claim about THIS specific product.
+    product_tag_labels: list[str] = []
+    for link in getattr(product, "tag_links", []) or []:
+        tag = getattr(link, "tag", None)
+        if tag and tag.label:
+            product_tag_labels.append(tag.label)
+    if product_tag_labels:
+        parts.append("Product value tags: " + ", ".join(sorted(set(product_tag_labels))))
+
     if vendor and vendor.allowed_tags:
         labels: list[str] = []
         for link in vendor.allowed_tags:
             if link.tag and link.tag.label:
                 labels.append(link.tag.label)
+        # Avoid duplicating product tags already captured above.
+        labels = [l for l in labels if l not in set(product_tag_labels)]
         if labels:
-            parts.append("Value tags: " + ", ".join(sorted(set(labels))))
+            parts.append("Vendor allowed tags: " + ", ".join(sorted(set(labels))))
     return "\n".join(parts)
 
 
@@ -92,7 +106,12 @@ def upsert_product_embedding(db: Session, product_id: int) -> bool:
     """Compute and store product embedding if enabled and content changed."""
     if not get_settings().vector_recs_enabled:
         return False
-    product = db.get(VendorProduct, product_id)
+    product = (
+        db.query(VendorProduct)
+        .options(selectinload(VendorProduct.tag_links).selectinload(VendorProductTag.tag))
+        .filter(VendorProduct.id == product_id)
+        .one_or_none()
+    )
     if not product:
         return False
     vendor = (

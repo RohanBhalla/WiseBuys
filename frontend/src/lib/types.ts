@@ -75,6 +75,7 @@ export interface VendorProductPublic {
   differentiator: string | null;
   key_features: string[] | null;
   is_published: boolean;
+  tags: TagPublic[];
   created_at: string;
   updated_at: string;
 }
@@ -88,6 +89,7 @@ export interface VendorProductSummary {
   price_hint: string | number | null;
   differentiator: string | null;
   key_features: string[] | null;
+  tags: TagPublic[];
 }
 
 export interface ComparablePurchase {

@@ -16,9 +16,9 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as VendorIndexRouteImport } from './routes/vendor.index'
 import { Route as DashboardIndexRouteImport } from './routes/dashboard.index'
-import { Route as VendorCatalogRouteImport } from './routes/vendor.catalog'
 import { Route as VendorApplyRouteImport } from './routes/vendor.apply'
 import { Route as DashboardConnectRouteImport } from './routes/dashboard.connect'
+import { Route as VendorCatalogIndexRouteImport } from './routes/vendor.catalog.index'
 import { Route as VendorCatalogNewRouteImport } from './routes/vendor.catalog.new'
 import { Route as VendorCatalogProductIdRouteImport } from './routes/vendor.catalog.$productId'
 
@@ -57,11 +57,6 @@ const DashboardIndexRoute = DashboardIndexRouteImport.update({
   path: '/',
   getParentRoute: () => DashboardRoute,
 } as any)
-const VendorCatalogRoute = VendorCatalogRouteImport.update({
-  id: '/catalog',
-  path: '/catalog',
-  getParentRoute: () => VendorRoute,
-} as any)
 const VendorApplyRoute = VendorApplyRouteImport.update({
   id: '/apply',
   path: '/apply',
@@ -72,15 +67,20 @@ const DashboardConnectRoute = DashboardConnectRouteImport.update({
   path: '/connect',
   getParentRoute: () => DashboardRoute,
 } as any)
+const VendorCatalogIndexRoute = VendorCatalogIndexRouteImport.update({
+  id: '/catalog/',
+  path: '/catalog/',
+  getParentRoute: () => VendorRoute,
+} as any)
 const VendorCatalogNewRoute = VendorCatalogNewRouteImport.update({
-  id: '/new',
-  path: '/new',
-  getParentRoute: () => VendorCatalogRoute,
+  id: '/catalog/new',
+  path: '/catalog/new',
+  getParentRoute: () => VendorRoute,
 } as any)
 const VendorCatalogProductIdRoute = VendorCatalogProductIdRouteImport.update({
-  id: '/$productId',
-  path: '/$productId',
-  getParentRoute: () => VendorCatalogRoute,
+  id: '/catalog/$productId',
+  path: '/catalog/$productId',
+  getParentRoute: () => VendorRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -91,11 +91,11 @@ export interface FileRoutesByFullPath {
   '/vendor': typeof VendorRouteWithChildren
   '/dashboard/connect': typeof DashboardConnectRoute
   '/vendor/apply': typeof VendorApplyRoute
-  '/vendor/catalog': typeof VendorCatalogRouteWithChildren
   '/dashboard/': typeof DashboardIndexRoute
   '/vendor/': typeof VendorIndexRoute
   '/vendor/catalog/$productId': typeof VendorCatalogProductIdRoute
   '/vendor/catalog/new': typeof VendorCatalogNewRoute
+  '/vendor/catalog/': typeof VendorCatalogIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -103,11 +103,11 @@ export interface FileRoutesByTo {
   '/onboarding': typeof OnboardingRoute
   '/dashboard/connect': typeof DashboardConnectRoute
   '/vendor/apply': typeof VendorApplyRoute
-  '/vendor/catalog': typeof VendorCatalogRouteWithChildren
   '/dashboard': typeof DashboardIndexRoute
   '/vendor': typeof VendorIndexRoute
   '/vendor/catalog/$productId': typeof VendorCatalogProductIdRoute
   '/vendor/catalog/new': typeof VendorCatalogNewRoute
+  '/vendor/catalog': typeof VendorCatalogIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -118,11 +118,11 @@ export interface FileRoutesById {
   '/vendor': typeof VendorRouteWithChildren
   '/dashboard/connect': typeof DashboardConnectRoute
   '/vendor/apply': typeof VendorApplyRoute
-  '/vendor/catalog': typeof VendorCatalogRouteWithChildren
   '/dashboard/': typeof DashboardIndexRoute
   '/vendor/': typeof VendorIndexRoute
   '/vendor/catalog/$productId': typeof VendorCatalogProductIdRoute
   '/vendor/catalog/new': typeof VendorCatalogNewRoute
+  '/vendor/catalog/': typeof VendorCatalogIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -134,11 +134,11 @@ export interface FileRouteTypes {
     | '/vendor'
     | '/dashboard/connect'
     | '/vendor/apply'
-    | '/vendor/catalog'
     | '/dashboard/'
     | '/vendor/'
     | '/vendor/catalog/$productId'
     | '/vendor/catalog/new'
+    | '/vendor/catalog/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -146,11 +146,11 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/dashboard/connect'
     | '/vendor/apply'
-    | '/vendor/catalog'
     | '/dashboard'
     | '/vendor'
     | '/vendor/catalog/$productId'
     | '/vendor/catalog/new'
+    | '/vendor/catalog'
   id:
     | '__root__'
     | '/'
@@ -160,11 +160,11 @@ export interface FileRouteTypes {
     | '/vendor'
     | '/dashboard/connect'
     | '/vendor/apply'
-    | '/vendor/catalog'
     | '/dashboard/'
     | '/vendor/'
     | '/vendor/catalog/$productId'
     | '/vendor/catalog/new'
+    | '/vendor/catalog/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -226,13 +226,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardIndexRouteImport
       parentRoute: typeof DashboardRoute
     }
-    '/vendor/catalog': {
-      id: '/vendor/catalog'
-      path: '/catalog'
-      fullPath: '/vendor/catalog'
-      preLoaderRoute: typeof VendorCatalogRouteImport
-      parentRoute: typeof VendorRoute
-    }
     '/vendor/apply': {
       id: '/vendor/apply'
       path: '/apply'
@@ -247,19 +240,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardConnectRouteImport
       parentRoute: typeof DashboardRoute
     }
+    '/vendor/catalog/': {
+      id: '/vendor/catalog/'
+      path: '/catalog'
+      fullPath: '/vendor/catalog/'
+      preLoaderRoute: typeof VendorCatalogIndexRouteImport
+      parentRoute: typeof VendorRoute
+    }
     '/vendor/catalog/new': {
       id: '/vendor/catalog/new'
-      path: '/new'
+      path: '/catalog/new'
       fullPath: '/vendor/catalog/new'
       preLoaderRoute: typeof VendorCatalogNewRouteImport
-      parentRoute: typeof VendorCatalogRoute
+      parentRoute: typeof VendorRoute
     }
     '/vendor/catalog/$productId': {
       id: '/vendor/catalog/$productId'
-      path: '/$productId'
+      path: '/catalog/$productId'
       fullPath: '/vendor/catalog/$productId'
       preLoaderRoute: typeof VendorCatalogProductIdRouteImport
-      parentRoute: typeof VendorCatalogRoute
+      parentRoute: typeof VendorRoute
     }
   }
 }
@@ -278,30 +278,20 @@ const DashboardRouteWithChildren = DashboardRoute._addFileChildren(
   DashboardRouteChildren,
 )
 
-interface VendorCatalogRouteChildren {
-  VendorCatalogProductIdRoute: typeof VendorCatalogProductIdRoute
-  VendorCatalogNewRoute: typeof VendorCatalogNewRoute
-}
-
-const VendorCatalogRouteChildren: VendorCatalogRouteChildren = {
-  VendorCatalogProductIdRoute: VendorCatalogProductIdRoute,
-  VendorCatalogNewRoute: VendorCatalogNewRoute,
-}
-
-const VendorCatalogRouteWithChildren = VendorCatalogRoute._addFileChildren(
-  VendorCatalogRouteChildren,
-)
-
 interface VendorRouteChildren {
   VendorApplyRoute: typeof VendorApplyRoute
-  VendorCatalogRoute: typeof VendorCatalogRouteWithChildren
   VendorIndexRoute: typeof VendorIndexRoute
+  VendorCatalogProductIdRoute: typeof VendorCatalogProductIdRoute
+  VendorCatalogNewRoute: typeof VendorCatalogNewRoute
+  VendorCatalogIndexRoute: typeof VendorCatalogIndexRoute
 }
 
 const VendorRouteChildren: VendorRouteChildren = {
   VendorApplyRoute: VendorApplyRoute,
-  VendorCatalogRoute: VendorCatalogRouteWithChildren,
   VendorIndexRoute: VendorIndexRoute,
+  VendorCatalogProductIdRoute: VendorCatalogProductIdRoute,
+  VendorCatalogNewRoute: VendorCatalogNewRoute,
+  VendorCatalogIndexRoute: VendorCatalogIndexRoute,
 }
 
 const VendorRouteWithChildren =

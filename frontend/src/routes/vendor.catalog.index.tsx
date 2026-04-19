@@ -6,7 +6,7 @@ import { apiFetch, ApiError } from "@/lib/api";
 import { useRequireRole } from "@/lib/auth";
 import type { VendorProductPublic, VendorProfilePublic } from "@/lib/types";
 
-export const Route = createFileRoute("/vendor/catalog")({
+export const Route = createFileRoute("/vendor/catalog/")({
   head: () => ({
     meta: [{ title: "Catalog — WiseBuys" }],
   }),
@@ -99,6 +99,15 @@ function VendorCatalogPage() {
               <div className="mt-4 num-display text-charcoal">
                 {p.price_hint != null ? `${p.currency} ${p.price_hint}` : "—"}
               </div>
+              {p.tags && p.tags.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {p.tags.map((t) => (
+                    <Stamp key={t.id} color="azure" className="!text-[0.6rem]">
+                      {t.label}
+                    </Stamp>
+                  ))}
+                </div>
+              )}
               <div className="mt-4 flex gap-2">
                 <Link to="/vendor/catalog/$productId" params={{ productId: String(p.id) }} className="text-xs font-semibold text-terracotta underline">
                   Edit
