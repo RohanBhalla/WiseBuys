@@ -270,3 +270,10 @@ export interface KnotMerchantLite {
   logo?: string | null;
   category?: string | null;
 }
+
+export interface DevSimulateAck {
+  requested: "link" | "disconnect";
+  merchant_id: number;
+  external_user_id: string;
+  knot_response: Record<string, unknown> | null;
+}

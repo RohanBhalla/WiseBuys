@@ -86,3 +86,33 @@ class SyncResponse(BaseModel):
 class WebhookAck(BaseModel):
     received: bool = True
     event: str | None = None
+
+
+class DevSimulateLinkRequest(BaseModel):
+    """Body for POST /api/knot/dev/simulate-link.
+
+    Triggers Knot's `POST /development/accounts/link` so the configured
+    webhook receives `AUTHENTICATED` followed (optionally) by
+    `NEW_TRANSACTIONS_AVAILABLE` and `UPDATED_TRANSACTIONS_AVAILABLE`.
+    """
+
+    merchant_id: int
+    new_transactions: bool = True
+    updated_transactions: bool = False
+
+
+class DevSimulateDisconnectRequest(BaseModel):
+    """Body for POST /api/knot/dev/simulate-disconnect.
+
+    Triggers Knot's `POST /development/accounts/disconnect` so the
+    configured webhook receives `ACCOUNT_LOGIN_REQUIRED`.
+    """
+
+    merchant_id: int
+
+
+class DevSimulateAck(BaseModel):
+    requested: str
+    merchant_id: int
+    external_user_id: str
+    knot_response: dict | None = None

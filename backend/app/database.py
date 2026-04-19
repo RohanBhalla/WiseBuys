@@ -30,7 +30,7 @@ def ensure_sqlite_embedding_columns(engine) -> None:
     if engine.dialect.name != "sqlite":
         return
 
-    tables = ("customer_profiles", "vendor_products")
+    tables = ("customer_profiles", "vendor_products", "knot_line_items")
     with engine.begin() as conn:
         for table in tables:
             res = conn.execute(text(f'PRAGMA table_info("{table}")'))

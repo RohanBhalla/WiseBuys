@@ -5,7 +5,7 @@ import os
 import pytest
 
 from app.knot.signature import compute_knot_signature
-from app.knot_deps import get_knot
+from app.knot_deps import get_knot, get_knot_optional
 from app.main import app
 from tests.conftest import auth_headers
 from tests.fakes.knot import FakeKnotClient, sample_transactions
@@ -15,12 +15,14 @@ from tests.fakes.knot import FakeKnotClient, sample_transactions
 def fake_knot():
     fake = FakeKnotClient()
     app.dependency_overrides[get_knot] = lambda: fake
+    app.dependency_overrides[get_knot_optional] = lambda: fake
     os.environ["KNOT_CLIENT_ID"] = "test-client"
     os.environ["KNOT_SECRET"] = "test-secret"
     try:
         yield fake
     finally:
         app.dependency_overrides.pop(get_knot, None)
+        app.dependency_overrides.pop(get_knot_optional, None)
 
 
 def _customer(client):
@@ -212,6 +214,134 @@ def test_invalid_signature_rejected(client, fake_knot, monkeypatch):
         json={"event": "AUTHENTICATED", "session_id": "sess-x"},
     )
     assert res.status_code == 401
+
+
+def test_updated_transactions_webhook_refreshes_by_id(client, fake_knot):
+    """UPDATED_TRANSACTIONS_AVAILABLE should call Get Transaction By ID per
+    https://docs.knotapi.com/transaction-link/webhook-events/updated-transactions-available
+    and upsert the changed order_status/line items."""
+
+    headers = _customer(client)
+    me = client.get("/api/auth/me", headers=headers).json()
+    external_user_id = f"wb-user-{me['id']}"
+
+    # 1) Seed two purchases via NEW_TRANSACTIONS_AVAILABLE.
+    fake_knot.pages = [{"transactions": sample_transactions(100, 2), "next_cursor": None}]
+    res = client.post(
+        "/api/knot/webhooks",
+        json={
+            "event": "NEW_TRANSACTIONS_AVAILABLE",
+            "session_id": "sess-upd-1",
+            "external_user_id": external_user_id,
+            "merchant": {"id": 19, "name": "DoorDash"},
+        },
+    )
+    assert res.status_code == 200, res.text
+
+    # 2) Knot updates one transaction's order_status from DELIVERED -> RETURNED.
+    updated_txn = sample_transactions(100, 1)[0]
+    updated_txn["order_status"] = "RETURNED"
+    fake_knot.transactions_by_id = {updated_txn["id"]: updated_txn}
+
+    res2 = client.post(
+        "/api/knot/webhooks",
+        json={
+            "event": "UPDATED_TRANSACTIONS_AVAILABLE",
+            "session_id": "sess-upd-2",
+            "external_user_id": external_user_id,
+            "merchant": {"id": 19, "name": "DoorDash"},
+            "data": {"transactions": [updated_txn["id"]]},
+        },
+    )
+    assert res2.status_code == 200, res2.text
+
+    purchases = client.get("/api/knot/purchases", headers=headers).json()
+    target = next(p for p in purchases if p["knot_transaction_id"] == updated_txn["id"])
+    assert target["order_status"] == "RETURNED"
+
+
+def test_merchant_status_update_event_is_acked(client, fake_knot):
+    res = client.post(
+        "/api/knot/webhooks",
+        json={
+            "event": "MERCHANT_STATUS_UPDATE",
+            "merchant": {"id": 19, "name": "DoorDash"},
+            "type": "transaction_link",
+            "platform": "web",
+        },
+    )
+    assert res.status_code == 200
+    assert res.json()["event"] == "MERCHANT_STATUS_UPDATE"
+
+
+def test_require_signature_rejects_unsigned(client, fake_knot, monkeypatch):
+    monkeypatch.setenv("KNOT_SECRET", "real-secret")
+    monkeypatch.setenv("KNOT_WEBHOOK_REQUIRE_SIGNATURE", "true")
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+    try:
+        res = client.post(
+            "/api/knot/webhooks",
+            json={"event": "AUTHENTICATED", "session_id": "sess-z"},
+        )
+        assert res.status_code == 401
+    finally:
+        get_settings.cache_clear()
+
+
+def test_dev_simulate_link_calls_knot(client, fake_knot):
+    headers = _customer(client)
+    res = client.post(
+        "/api/knot/dev/simulate-link",
+        headers=headers,
+        json={"merchant_id": 19, "new_transactions": True, "updated_transactions": True},
+    )
+    assert res.status_code == 202, res.text
+    body = res.json()
+    assert body["requested"] == "link"
+    assert body["merchant_id"] == 19
+    assert body["external_user_id"].startswith("wb-user-")
+
+    # Verify the underlying client call carried the documented shape.
+    name, kwargs = next(c for c in fake_knot.calls if c[0] == "link_account_dev")
+    assert name == "link_account_dev"
+    assert kwargs == {
+        "external_user_id": body["external_user_id"],
+        "merchant_id": 19,
+        "new": True,
+        "updated": True,
+    }
+
+
+def test_dev_simulate_disconnect_calls_knot(client, fake_knot):
+    headers = _customer(client)
+    res = client.post(
+        "/api/knot/dev/simulate-disconnect",
+        headers=headers,
+        json={"merchant_id": 19},
+    )
+    assert res.status_code == 202, res.text
+    name, kwargs = next(c for c in fake_knot.calls if c[0] == "disconnect_account_dev")
+    assert name == "disconnect_account_dev"
+    assert kwargs["merchant_id"] == 19
+
+
+def test_dev_simulate_blocked_when_disabled(client, fake_knot, monkeypatch):
+    monkeypatch.setenv("KNOT_DEV_SIMULATION_ENABLED", "false")
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+    try:
+        headers = _customer(client)
+        res = client.post(
+            "/api/knot/dev/simulate-link",
+            headers=headers,
+            json={"merchant_id": 19},
+        )
+        assert res.status_code == 403
+    finally:
+        get_settings.cache_clear()
 
 
 def test_signature_helper_matches_known_input():

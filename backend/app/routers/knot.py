@@ -10,6 +10,9 @@ from app.models import KnotMerchantAccount, KnotPurchase, User
 from app.schemas.knot import (
     CreateSessionRequest,
     CreateSessionResponse,
+    DevSimulateAck,
+    DevSimulateDisconnectRequest,
+    DevSimulateLinkRequest,
     KnotMerchantLite,
     KnotPurchasesMeta,
     MerchantAccountPublic,
@@ -136,6 +139,103 @@ def purchases_meta(
         q = q.filter(KnotPurchase.knot_merchant_id == merchant_id)
     total = int(q.scalar() or 0)
     return KnotPurchasesMeta(total=total)
+
+
+@router.post(
+    "/dev/simulate-link",
+    response_model=DevSimulateAck,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def dev_simulate_link(
+    payload: DevSimulateLinkRequest,
+    user: User = Depends(get_current_customer),
+    knot: KnotClient = Depends(get_knot),
+) -> DevSimulateAck:
+    """Dev-only: ask Knot to simulate a Transaction Link merchant link
+    against your configured webhook (`AUTHENTICATED` then
+    `NEW_TRANSACTIONS_AVAILABLE`, optionally
+    `UPDATED_TRANSACTIONS_AVAILABLE`).
+
+    Calls Knot's `POST /development/accounts/link`. Only available when
+    `KNOT_ENVIRONMENT=development` and `KNOT_DEV_SIMULATION_ENABLED=true`.
+    """
+
+    settings = get_settings()
+    if not settings.knot_dev_simulation_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Knot dev simulation endpoints are disabled.",
+        )
+    if settings.knot_environment != "development":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Knot dev simulation only works against the development environment.",
+        )
+
+    external_user_id = external_user_id_for(user)
+    try:
+        response = knot.link_account_dev(
+            external_user_id=external_user_id,
+            merchant_id=payload.merchant_id,
+            new_transactions=payload.new_transactions,
+            updated_transactions=payload.updated_transactions,
+        )
+    except KnotError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=exc.payload)
+
+    return DevSimulateAck(
+        requested="link",
+        merchant_id=payload.merchant_id,
+        external_user_id=external_user_id,
+        knot_response=response if isinstance(response, dict) else None,
+    )
+
+
+@router.post(
+    "/dev/simulate-disconnect",
+    response_model=DevSimulateAck,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def dev_simulate_disconnect(
+    payload: DevSimulateDisconnectRequest,
+    user: User = Depends(get_current_customer),
+    knot: KnotClient = Depends(get_knot),
+) -> DevSimulateAck:
+    """Dev-only: ask Knot to flip a linked account to ``disconnected`` so
+    your webhook receives `ACCOUNT_LOGIN_REQUIRED`.
+
+    Calls Knot's `POST /development/accounts/disconnect`. Only available
+    when `KNOT_ENVIRONMENT=development` and
+    `KNOT_DEV_SIMULATION_ENABLED=true`.
+    """
+
+    settings = get_settings()
+    if not settings.knot_dev_simulation_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Knot dev simulation endpoints are disabled.",
+        )
+    if settings.knot_environment != "development":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Knot dev simulation only works against the development environment.",
+        )
+
+    external_user_id = external_user_id_for(user)
+    try:
+        response = knot.disconnect_account_dev(
+            external_user_id=external_user_id,
+            merchant_id=payload.merchant_id,
+        )
+    except KnotError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=exc.payload)
+
+    return DevSimulateAck(
+        requested="disconnect",
+        merchant_id=payload.merchant_id,
+        external_user_id=external_user_id,
+        knot_response=response if isinstance(response, dict) else None,
+    )
 
 
 @router.get("/purchases", response_model=list[PurchasePublic])

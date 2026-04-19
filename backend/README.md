@@ -50,7 +50,19 @@ Then open [http://localhost:8000/docs](http://localhost:8000/docs) for Swagger U
 
 The React app lives in `../frontend` (Vite dev server defaults to port **8080**). CORS allows `http://localhost:8080` and `http://127.0.0.1:8080` with credentials enabled for future cookie-based auth.
 
-**Knot webhooks (local):** Knot must POST to a public URL. Expose the API with `ngrok http 8000`, then set the webhook in the Knot customer dashboard to `https://<your-ngrok-host>/api/knot/webhooks` (same `KNOT_SECRET` for signature verification).
+**Knot webhooks (local):** Knot must POST to a public URL. Expose the API
+with `ngrok http 8000`, then set the webhook in the Knot customer dashboard
+([Webhooks settings](https://dashboard.knotapi.com/webhooks)) to
+`https://<your-ngrok-host>/api/knot/webhooks` for the **development**
+environment. The same `KNOT_SECRET` is used to verify the
+`Knot-Signature` HMAC-SHA256 header (per
+[Webhook Verification](https://docs.knotapi.com/webhooks#webhook-verification)).
+Knot retries non-2xx responses up to twice, so the receiver always 200s
+and logs/queues failures internally.
+
+In production set `KNOT_WEBHOOK_REQUIRE_SIGNATURE=true` so unsigned
+requests are rejected. Knot's webhook traffic comes from `35.232.249.218`
+(allowlist if needed).
 
 The first run creates the SQLite database, seeds the value tags, and (if
 `BOOTSTRAP_ADMIN_EMAIL` / `BOOTSTRAP_ADMIN_PASSWORD` are set) creates the first
@@ -110,13 +122,36 @@ pytest
 3. After the user completes link, Knot calls `POST /api/knot/webhooks` with
    `event = AUTHENTICATED`, then `NEW_TRANSACTIONS_AVAILABLE`. WiseBuys
    verifies the `Knot-Signature` header (HMAC-SHA256, base64) and persists the
-   merchant account / triggers a sync.
+   merchant account / triggers a sync. `UPDATED_TRANSACTIONS_AVAILABLE` is
+   handled by calling `Get Transaction By ID` for each id in the payload's
+   `data.transactions` array (per
+   [docs](https://docs.knotapi.com/transaction-link/webhook-events/updated-transactions-available)).
+   `MERCHANT_STATUS_UPDATE` and `ACCOUNT_LOGIN_REQUIRED` are also handled.
 4. `POST /api/knot/sync { "merchant_id": 19 }` manually paginates through
    `/transactions/sync` (cursor-based) and upserts `knot_purchases` +
    `knot_line_items`.
 5. `GET /api/knot/purchases` lists the customer's normalized purchase history.
 6. `GET /api/knot/merchant-accounts` shows linked merchants and last sync
    status (`connected` / `disconnected`).
+
+#### Dev-only webhook simulation
+
+When `KNOT_ENVIRONMENT=development` and
+`KNOT_DEV_SIMULATION_ENABLED=true` (default), the API exposes two
+customer-auth helpers that hit Knot's
+[`/development/accounts/link`](https://docs.knotapi.com/api-reference/development/link-account)
+and `/development/accounts/disconnect` endpoints so your webhook
+listener actually fires without invoking the SDK:
+
+- `POST /api/knot/dev/simulate-link` `{ "merchant_id": 19, "new_transactions": true, "updated_transactions": false }`
+  → Knot fires `AUTHENTICATED` then `NEW_TRANSACTIONS_AVAILABLE` (and
+  `UPDATED_TRANSACTIONS_AVAILABLE` if requested) at your subscribed
+  webhook URL.
+- `POST /api/knot/dev/simulate-disconnect` `{ "merchant_id": 19 }`
+  → Knot fires `ACCOUNT_LOGIN_REQUIRED`.
+
+These let you exercise the full webhook → sync pipeline against the
+**development** environment without needing to log in via the Knot SDK.
 
 ### Recommendations & insights
 

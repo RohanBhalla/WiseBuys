@@ -19,6 +19,18 @@ class Settings(BaseSettings):
     knot_client_id: str | None = Field(default=None)
     knot_secret: str | None = Field(default=None)
     knot_environment: str = Field(default="development")
+    # When true, /api/knot/webhooks rejects requests missing or with a bad
+    # `Knot-Signature` header (HMAC-SHA256). Defaults to False so local dev
+    # without a configured secret keeps working; set True for production.
+    knot_webhook_require_signature: bool = Field(default=False)
+    # Public URL Knot should POST to. Informational only; the actual
+    # subscription is configured in the Knot dashboard.
+    knot_webhook_url: str | None = Field(default=None)
+    # When true, the dev-only /api/knot/dev/* simulation endpoints are
+    # exposed (see Backend/app/routers/knot.py). They call Knot's
+    # /development/accounts/{link,disconnect} endpoints which only work
+    # against the development environment.
+    knot_dev_simulation_enabled: bool = Field(default=True)
 
     gemini_api_key: str | None = Field(default=None)
 
@@ -35,6 +47,14 @@ class Settings(BaseSettings):
     vector_rec_weight_recency: float = Field(default=0.35)
     embeddings_batch_size: int = Field(default=32)
     embeddings_max_retries: int = Field(default=4)
+    # Soft per-minute cap on Gemini embedding requests. The free tier on
+    # ``gemini-embedding-001`` allows 100 RPM; we self-throttle to stay below
+    # that with headroom. Bump this on a paid tier.
+    embeddings_max_rpm: int = Field(default=90)
+    # Minimum gap (seconds) the embedding limiter enforces between
+    # consecutive requests. Helps avoid bursting into the API even when
+    # we're under the per-minute cap; set to 0 to disable.
+    embeddings_min_interval_s: float = Field(default=2.0)
 
     # When true, bootstraps approved demo vendors + catalog (see app/seeds/demo_vendors.py).
     seed_demo_vendors: bool = Field(default=False)

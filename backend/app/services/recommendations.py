@@ -203,19 +203,61 @@ def _humanize_list(items: list[str]) -> str:
     return f"{', '.join(items[:-1])}, and {items[-1]}"
 
 
+# Cosine-similarity floor for the semantic comparable picker. Empirically the
+# Gemini gemini-embedding-001 model puts unrelated items (e.g. face cleanser
+# vs jerky sampler) below ~0.45 and same-category items (athletic socks vs
+# crew socks) well above 0.6. We pick a conservative floor so the UI never
+# anchors a recommendation on an obviously-unrelated past purchase.
+COMPARABLE_VEC_FLOOR = 0.55
+
+
 def _pick_comparable(
     product: VendorProduct,
     line_items_full: list[tuple[KnotPurchase, KnotLineItem]],
     product_tokens: set[str],
     dominant_categories: set[str],
 ) -> ComparablePurchase | None:
-    """Pick the most relevant past line item to compare against this product."""
+    """Pick the most relevant past line item to compare against this product.
+
+    Prefers semantic similarity (cosine of product vs line-item embeddings)
+    when available; otherwise falls back to lexical (name token overlap) and
+    category alignment with a strict floor so the UI never surfaces a
+    misleading pairing (e.g. a face cleanser as the comparable for a jerky
+    sampler).
+    """
 
     if not line_items_full:
         return None
     product_cat = (product.category or "").lower().replace(" ", "-") if product.category else ""
 
-    best: tuple[float, KnotPurchase, KnotLineItem] | None = None
+    # ---- Tier 1: semantic match via embeddings ------------------------------
+    # Strongest signal when both sides have vectors. We require the cosine to
+    # clear COMPARABLE_VEC_FLOOR, which in practice eliminates cross-domain
+    # pairings.
+    if product.embedding is not None:
+        best_vec: tuple[float, KnotPurchase, KnotLineItem] | None = None
+        for purchase, li in line_items_full:
+            if li.embedding is None:
+                continue
+            sim = _dot(product.embedding, li.embedding)
+            if sim < COMPARABLE_VEC_FLOOR:
+                continue
+            # Mild recency tiebreak so equally-similar items prefer the more
+            # recent purchase (more likely to feel relevant to the user).
+            adjusted = sim + 0.02 * _recency_factor(purchase.occurred_at)
+            if best_vec is None or adjusted > best_vec[0]:
+                best_vec = (adjusted, purchase, li)
+        if best_vec is not None:
+            return _to_comparable(best_vec[1], best_vec[2])
+
+    # ---- Tier 2: lexical / category fallback --------------------------------
+    # Used when embeddings are missing (e.g. backfill not yet run, vector recs
+    # disabled, or no per-line-item vector). We REQUIRE a real signal — either
+    # token overlap with the product name OR the same coarse category — so we
+    # never silently surface a totally unrelated recent purchase.
+    best_strong: tuple[float, KnotPurchase, KnotLineItem] | None = None
+    best_category: tuple[float, KnotPurchase, KnotLineItem] | None = None
+
     for purchase, li in line_items_full:
         li_tokens = _tokenize(li.name)
         overlap = len(product_tokens & li_tokens)
@@ -223,14 +265,30 @@ def _pick_comparable(
         cat_match = 1.0 if cat and (cat == product_cat or cat in dominant_categories) else 0.0
         recency = _recency_factor(purchase.occurred_at)
         score = overlap * 2.0 + cat_match * 1.0 + recency * 0.5
-        if score < 1.5:
-            continue
-        if best is None or score > best[0]:
-            best = (score, purchase, li)
 
+        if overlap >= 1:
+            if best_strong is None or score > best_strong[0]:
+                best_strong = (score, purchase, li)
+            continue
+        if cat_match > 0:
+            # Require category to match the *product's* category specifically
+            # (not just any dominant category in history) so we don't pair
+            # apparel with "everyday" Amazon orders.
+            if cat == product_cat:
+                cat_score = cat_match + recency * 0.5
+                if best_category is None or cat_score > best_category[0]:
+                    best_category = (cat_score, purchase, li)
+
+    best = best_strong or best_category
     if best is None:
+        # Returning None lets the UI fall back to its honest placeholder
+        # ("Similar to what you buy") instead of fabricating a misleading pair.
         return None
     _, purchase, li = best
+    return _to_comparable(purchase, li)
+
+
+def _to_comparable(purchase: KnotPurchase, li: KnotLineItem) -> ComparablePurchase:
     unit_price = float(li.unit_price) if li.unit_price is not None else None
     total = float(li.total) if li.total is not None else None
     if unit_price is None and total is not None and (li.quantity or 1) > 0:

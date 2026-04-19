@@ -187,6 +187,59 @@ def _persist_transaction(
     return purchase
 
 
+def refresh_transaction_by_id(
+    db: Session,
+    knot: KnotClient,
+    *,
+    user: User,
+    transaction_id: str,
+    knot_merchant_id: int | None = None,
+) -> KnotPurchase | None:
+    """Re-fetch a single transaction by ID and upsert it.
+
+    Used by the ``UPDATED_TRANSACTIONS_AVAILABLE`` webhook handler per
+    https://docs.knotapi.com/transaction-link/webhook-events/updated-transactions-available.
+    """
+
+    txn = knot.get_transaction(transaction_id)
+    if not isinstance(txn, dict) or not txn:
+        return None
+    inferred_merchant_id = knot_merchant_id
+    if inferred_merchant_id is None:
+        merchant = txn.get("merchant") or {}
+        if isinstance(merchant, dict) and merchant.get("id") is not None:
+            try:
+                inferred_merchant_id = int(merchant["id"])
+            except (TypeError, ValueError):
+                inferred_merchant_id = None
+    if inferred_merchant_id is None:
+        existing = (
+            db.query(KnotPurchase)
+            .filter(KnotPurchase.knot_transaction_id == transaction_id)
+            .one_or_none()
+        )
+        if existing is None:
+            logger.warning(
+                "Cannot refresh transaction %s: no merchant id in payload and no prior record.",
+                transaction_id,
+            )
+            return None
+        inferred_merchant_id = existing.knot_merchant_id
+
+    merchant_name = None
+    merchant_payload = txn.get("merchant")
+    if isinstance(merchant_payload, dict):
+        merchant_name = merchant_payload.get("name")
+
+    return _persist_transaction(
+        db,
+        user=user,
+        knot_merchant_id=inferred_merchant_id,
+        merchant_name=merchant_name,
+        txn=txn,
+    )
+
+
 def sync_transactions_for_account(
     db: Session,
     knot: KnotClient,
@@ -274,12 +327,19 @@ def sync_transactions_for_account(
     db.commit()
 
     try:
-        from app.services.vector_index import upsert_customer_embedding
+        from app.services.vector_index import (
+            upsert_customer_embedding,
+            upsert_line_item_embeddings,
+        )
 
+        # Embed/refresh per-line-item vectors first so the comparable picker
+        # has fresh signal for any newly-synced items, then refresh the
+        # customer-side query vector.
+        upsert_line_item_embeddings(db, user.id)
         upsert_customer_embedding(db, user.id)
         db.commit()
     except Exception as exc:  # noqa: BLE001
-        logger.warning("Customer embedding refresh failed after sync: %s", exc)
+        logger.warning("Embedding refresh failed after sync: %s", exc)
         db.rollback()
 
     return {

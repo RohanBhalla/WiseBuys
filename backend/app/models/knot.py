@@ -14,8 +14,11 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from pgvector.sqlalchemy import Vector
 
 from app.database import Base
+
+_LINE_ITEM_EMBEDDING_DIM = 768
 
 if TYPE_CHECKING:
     from app.models.user import User
@@ -103,5 +106,13 @@ class KnotLineItem(Base):
     total: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
     seller_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     raw: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+    # Per-line-item document embedding (RETRIEVAL_DOCUMENT). Used to find the
+    # semantically-closest past purchase to surface as a comparable in the UI.
+    embedding: Mapped[list[float] | None] = mapped_column(
+        Vector(_LINE_ITEM_EMBEDDING_DIM), nullable=True
+    )
+    embedding_signature: Mapped[str | None] = mapped_column(Text, nullable=True)
+    embedded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     purchase: Mapped[KnotPurchase] = relationship("KnotPurchase", back_populates="line_items")

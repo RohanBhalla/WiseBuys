@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, ExternalLink, Link2, RefreshCw, X } from "lucide-react";
+import { ArrowRight, ExternalLink, Link2, RefreshCw, Webhook, X } from "lucide-react";
 import { toast } from "sonner";
 import { PaperCard, Eyebrow, SectionLabel, Stamp } from "@/components/Primitives";
 import { apiFetch, ApiError } from "@/lib/api";
@@ -10,6 +10,7 @@ import { openKnotTransactionLink } from "@/lib/knot";
 import { cn } from "@/lib/utils";
 import type {
   CreateSessionResponse,
+  DevSimulateAck,
   KnotMerchantLite,
   KnotPurchasesMeta,
   LineItemPublic,
@@ -17,6 +18,11 @@ import type {
   PurchasePublic,
   SyncResponse,
 } from "@/lib/types";
+
+const KNOT_ENV = (import.meta.env.VITE_KNOT_ENVIRONMENT ?? "development") as
+  | "development"
+  | "production"
+  | "sandbox";
 
 export const Route = createFileRoute("/dashboard/connect")({
   head: () => ({
@@ -326,6 +332,49 @@ function ConnectPage() {
     onError: (e) => toast.error(e instanceof ApiError ? e.message : "Sync failed"),
   });
 
+  const simulateLinkM = useMutation({
+    mutationFn: (mid: number) =>
+      apiFetch<DevSimulateAck>("/api/knot/dev/simulate-link", {
+        method: "POST",
+        body: JSON.stringify({
+          merchant_id: mid,
+          new_transactions: true,
+          updated_transactions: true,
+        }),
+      }),
+    onSuccess: (ack) => {
+      toast.success(
+        `Knot dev link requested for merchant ${ack.merchant_id}. Webhook should fire shortly.`,
+      );
+      // Webhooks land asynchronously; pulse the cached views so the
+      // resulting account/purchases appear without a manual reload.
+      setTimeout(() => {
+        void qc.invalidateQueries({ queryKey: ["knot", "accounts"] });
+        void qc.invalidateQueries({ queryKey: ["knot", "purchases"] });
+        void qc.invalidateQueries({ queryKey: ["knot", "purchases-meta"] });
+        void qc.invalidateQueries({ queryKey: ["recommendations", "me"] });
+      }, 4000);
+    },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : "Dev link failed"),
+  });
+
+  const simulateDisconnectM = useMutation({
+    mutationFn: (mid: number) =>
+      apiFetch<DevSimulateAck>("/api/knot/dev/simulate-disconnect", {
+        method: "POST",
+        body: JSON.stringify({ merchant_id: mid }),
+      }),
+    onSuccess: (ack) => {
+      toast.success(
+        `Knot dev disconnect requested for merchant ${ack.merchant_id}. ACCOUNT_LOGIN_REQUIRED webhook coming.`,
+      );
+      setTimeout(() => {
+        void qc.invalidateQueries({ queryKey: ["knot", "accounts"] });
+      }, 4000);
+    },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : "Dev disconnect failed"),
+  });
+
   const openKnot = useMutation({
     mutationFn: async () => {
       const session = await apiFetch<CreateSessionResponse>("/api/knot/sessions", {
@@ -570,6 +619,50 @@ function ConnectPage() {
                 <X className="h-3.5 w-3.5" aria-hidden />
                 Dismiss
               </button>
+            </div>
+          </div>
+        </PaperCard>
+      )}
+
+      {KNOT_ENV === "development" && (
+        <PaperCard className="mt-8 p-6 md:p-8 border-charcoal/15 bg-cream-deep/40">
+          <div className="flex items-start gap-3">
+            <Webhook className="mt-1 h-5 w-5 shrink-0 text-charcoal/60" aria-hidden />
+            <div className="min-w-0 flex-1">
+              <Eyebrow>Dev environment · webhook simulation</Eyebrow>
+              <p className="mt-2 text-sm text-charcoal/70 max-w-3xl">
+                Trigger Knot's{" "}
+                <code className="bg-cream px-1">/development/accounts/link</code> and{" "}
+                <code className="bg-cream px-1">/development/accounts/disconnect</code> for the
+                selected merchant. Knot will POST to your configured webhook URL — your backend
+                handles <strong className="font-semibold text-charcoal/85">AUTHENTICATED</strong>,{" "}
+                <strong className="font-semibold text-charcoal/85">NEW_TRANSACTIONS_AVAILABLE</strong>,{" "}
+                <strong className="font-semibold text-charcoal/85">UPDATED_TRANSACTIONS_AVAILABLE</strong>,
+                and{" "}
+                <strong className="font-semibold text-charcoal/85">ACCOUNT_LOGIN_REQUIRED</strong>.
+              </p>
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => simulateLinkM.mutate(merchantId)}
+                  disabled={simulateLinkM.isPending}
+                  className="inline-flex items-center gap-2 rounded-sm bg-charcoal px-4 py-2 text-xs font-semibold text-cream hover:bg-terracotta disabled:opacity-50"
+                >
+                  {simulateLinkM.isPending ? "Requesting…" : "Simulate link + new txns"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => simulateDisconnectM.mutate(merchantId)}
+                  disabled={simulateDisconnectM.isPending}
+                  className="inline-flex items-center gap-2 rounded-sm border border-charcoal/20 bg-cream px-4 py-2 text-xs font-semibold text-charcoal hover:border-charcoal/40 disabled:opacity-50"
+                >
+                  {simulateDisconnectM.isPending ? "Requesting…" : "Simulate disconnect"}
+                </button>
+                <span className="text-xs text-charcoal/55">
+                  Targets merchant <span className="num-display font-semibold">{merchantId}</span>
+                  {selectedMerchant?.name ? ` (${selectedMerchant.name})` : ""}.
+                </span>
+              </div>
             </div>
           </div>
         </PaperCard>

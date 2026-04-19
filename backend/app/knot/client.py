@@ -118,15 +118,44 @@ class KnotClient:
         self,
         external_user_id: str,
         merchant_id: int,
-        product_type: str = "transaction_link",
+        *,
+        new_transactions: bool = True,
+        updated_transactions: bool = False,
     ) -> dict:
-        """Development-only: bypass the SDK and link a test account."""
+        """Development-only: bypass the SDK and link a Transaction Link
+        merchant account so the configured webhooks fire (`AUTHENTICATED`,
+        then `NEW_TRANSACTIONS_AVAILABLE`, optionally
+        `UPDATED_TRANSACTIONS_AVAILABLE`).
+
+        See https://docs.knotapi.com/api-reference/development/link-account.
+        """
+
+        body: dict[str, Any] = {
+            "external_user_id": external_user_id,
+            "merchant_id": merchant_id,
+            "transactions": {
+                "new": bool(new_transactions),
+                "updated": bool(updated_transactions),
+            },
+        }
+        return self._post("/development/accounts/link", body)
+
+    def disconnect_account_dev(
+        self,
+        external_user_id: str,
+        merchant_id: int,
+    ) -> dict:
+        """Development-only: flip a linked merchant account to
+        ``disconnected`` and trigger the ``ACCOUNT_LOGIN_REQUIRED`` webhook.
+
+        See https://docs.knotapi.com/api-reference/development/disconnect-account.
+        """
+
         return self._post(
-            "/link/account",
+            "/development/accounts/disconnect",
             {
                 "external_user_id": external_user_id,
                 "merchant_id": merchant_id,
-                "type": product_type,
             },
         )
 

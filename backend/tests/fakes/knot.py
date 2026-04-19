@@ -69,13 +69,44 @@ class FakeKnotClient:
         }
 
     def get_transaction(self, transaction_id: str) -> dict:
-        return {"id": transaction_id}
+        # Tests may seed `self.transactions_by_id` with richer payloads.
+        seeded = getattr(self, "transactions_by_id", {}) or {}
+        if transaction_id in seeded:
+            return seeded[transaction_id]
+        return {"id": transaction_id, "merchant": self.merchant}
 
     def list_merchants(self, type_: str = "transaction_link") -> dict:
         return {"merchants": [self.merchant]}
 
-    def link_account_dev(self, *_, **__) -> dict:
-        return {"linked": True}
+    def link_account_dev(
+        self,
+        external_user_id: str,
+        merchant_id: int,
+        *,
+        new_transactions: bool = True,
+        updated_transactions: bool = False,
+    ) -> dict:
+        self.calls.append(
+            (
+                "link_account_dev",
+                {
+                    "external_user_id": external_user_id,
+                    "merchant_id": merchant_id,
+                    "new": new_transactions,
+                    "updated": updated_transactions,
+                },
+            )
+        )
+        return {"message": "Success"}
+
+    def disconnect_account_dev(self, external_user_id: str, merchant_id: int) -> dict:
+        self.calls.append(
+            (
+                "disconnect_account_dev",
+                {"external_user_id": external_user_id, "merchant_id": merchant_id},
+            )
+        )
+        return {"message": "Success"}
 
     def close(self) -> None:
         return None
