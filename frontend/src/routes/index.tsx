@@ -83,9 +83,10 @@ function Hero() {
           <div className="hidden md:block absolute -bottom-6 -left-8 paper-card grain rounded-sm p-4 max-w-[14rem] rotate-[-3deg] bg-paper">
             <Eyebrow>Receipt #4421</Eyebrow>
             <div className="display-serif text-charcoal text-2xl mt-1">$847</div>
-            <div className="text-xs text-charcoal/60 mt-1">saved last quarter</div>
+            <div className="text-xs text-charcoal mt-1">saved last quarter</div>
           </div>
-          <div className="hidden md:block absolute -top-4 -right-6 paper-card grain rounded-sm p-3 rotate-[4deg] bg-azure text-cream">
+          {/* No paper-card — its CSS forces a light paper bg and was overriding bg-azure, so cream-on-cream failed contrast */}
+          <div className="hidden md:block absolute -top-4 -right-6 rounded-sm p-3 rotate-[4deg] bg-forest text-cream border border-charcoal/25 shadow-md">
             <div className="text-[0.6rem] tracking-[0.2em] uppercase font-semibold">Better swap found</div>
             <div className="display-serif text-xl mt-0.5">+38% value</div>
           </div>

@@ -11,11 +11,13 @@ from app.models import (
     VendorApplicationTag,
     VendorProfile,
 )
+from app.schemas.analytics import VendorAnalyticsResponse
 from app.schemas.vendor import (
     VendorApplicationCreate,
     VendorApplicationPublic,
     VendorProfilePublic,
 )
+from app.services.vendor_analytics import compute_vendor_analytics
 
 router = APIRouter(prefix="/api/vendors", tags=["vendors"])
 
@@ -112,3 +114,18 @@ def get_my_vendor_profile(
             detail="Vendor profile not yet created. Application must be approved.",
         )
     return profile
+
+
+@router.get("/me/analytics", response_model=VendorAnalyticsResponse)
+def get_my_analytics(
+    user: User = Depends(get_current_vendor),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Vendor-facing insights: reach, competitors, pricing, clicks.
+
+    Reach numbers are computed by replaying the rules-only recommender across a
+    bounded sample of customers, so they're best read as directional signals,
+    not exact counts.
+    """
+
+    return compute_vendor_analytics(db, user)

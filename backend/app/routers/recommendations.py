@@ -1,10 +1,12 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.deps import get_current_customer, get_db
-from app.models import User
+from app.models import RecommendationClick, User, VendorProduct
 from app.schemas.recommendations import (
     ComparablePurchase,
+    RecommendationClickCreate,
+    RecommendationClickPublic,
     RecommendationItem,
     SpendingInsight,
     VendorProductSummary,
@@ -44,6 +46,31 @@ def my_recommendations(
         )
         for r in recs
     ]
+
+
+@router.post(
+    "/clicks",
+    response_model=RecommendationClickPublic,
+    status_code=status.HTTP_201_CREATED,
+)
+def record_click(
+    payload: RecommendationClickCreate,
+    user: User = Depends(get_current_customer),
+    db: Session = Depends(get_db),
+) -> RecommendationClick:
+    product = db.get(VendorProduct, payload.product_id)
+    if not product:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
+    click = RecommendationClick(
+        user_id=user.id,
+        product_id=product.id,
+        vendor_user_id=product.vendor_user_id,
+        source=(payload.source or "dashboard")[:64],
+    )
+    db.add(click)
+    db.commit()
+    db.refresh(click)
+    return click
 
 
 insights_router = APIRouter(prefix="/api/insights", tags=["insights"])

@@ -5,6 +5,7 @@ import {
   ArrowRight,
   ChevronDown,
   Coffee,
+  Filter,
   Leaf,
   MapPin,
   RefreshCw,
@@ -307,7 +308,7 @@ function Stats({
   return (
     <section className="bg-cream-deep border-b border-charcoal/15">
       <div className="mx-auto max-w-7xl px-5 sm:px-8 py-12">
-        <SectionLabel number="§ A" label="Summary" />
+        <SectionLabel number="A" label="Summary" />
         <div className="mt-8 grid gap-5 md:grid-cols-3">
           {stats.map((s) => (
             <PaperCard key={s.label} className="p-7">
@@ -328,6 +329,31 @@ function recIcon(category: string | null | undefined) {
   if (c.includes("clean") || c.includes("home")) return Leaf;
   if (c.includes("coffee") || c.includes("food")) return Coffee;
   return ShoppingBag;
+}
+
+function parsePriceHint(value: string | number | null | undefined): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const n = typeof value === "string" ? Number(value) : value;
+  return Number.isFinite(n) ? n : null;
+}
+
+type PriceBucket = "all" | "under25" | "25-50" | "50-100" | "over100";
+
+function priceInBucket(price: number | null, bucket: PriceBucket): boolean {
+  if (bucket === "all") return true;
+  if (price == null) return false;
+  switch (bucket) {
+    case "under25":
+      return price < 25;
+    case "25-50":
+      return price >= 25 && price < 50;
+    case "50-100":
+      return price >= 50 && price < 100;
+    case "over100":
+      return price >= 100;
+    default:
+      return true;
+  }
 }
 
 function formatPrice(value: string | number | null | undefined, currency?: string | null): string | null {
@@ -358,13 +384,95 @@ function priceDelta(
 
 function RecommendationsFeed({ items, loading }: { items: RecommendationItem[]; loading: boolean }) {
   const [open, setOpen] = useState<string | null>(null);
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [priceBucket, setPriceBucket] = useState<PriceBucket>("all");
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
-  const handleSwitch = (name: string) => {
-    toast(`Interest logged: ${name}`, {
-      description: "No switch endpoint yet — this is recorded for your next sync story.",
+  const categoryOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const labels: string[] = [];
+    for (const r of items) {
+      const c = r.product.category?.trim();
+      if (!c) continue;
+      const key = c.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      labels.push(c);
+    }
+    return labels.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  }, [items]);
+
+  const tagOptions = useMemo(() => {
+    const byLower = new Map<string, string>();
+    for (const r of items) {
+      for (const f of r.product.key_features ?? []) {
+        const t = f.trim();
+        if (!t) continue;
+        const k = t.toLowerCase();
+        if (!byLower.has(k)) byLower.set(k, t);
+      }
+    }
+    return [...byLower.values()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  }, [items]);
+
+  const filteredItems = useMemo(() => {
+    const catNorm = categoryFilter === "all" ? null : categoryFilter.trim().toLowerCase();
+    const tagSet = new Set(selectedTags.map((t) => t.toLowerCase()));
+    return items.filter((r) => {
+      if (catNorm) {
+        const pc = (r.product.category ?? "").trim().toLowerCase();
+        if (pc !== catNorm) return false;
+      }
+      if (!priceInBucket(parsePriceHint(r.product.price_hint), priceBucket)) return false;
+      if (tagSet.size > 0) {
+        const feats = new Set((r.product.key_features ?? []).map((f) => f.trim().toLowerCase()).filter(Boolean));
+        let has = false;
+        for (const t of tagSet) {
+          if (feats.has(t)) {
+            has = true;
+            break;
+          }
+        }
+        if (!has) return false;
+      }
+      return true;
     });
-    // eslint-disable-next-line no-console
-    console.info("switch_interest", name);
+  }, [items, categoryFilter, priceBucket, selectedTags]);
+
+  const filtersActive =
+    categoryFilter !== "all" || priceBucket !== "all" || selectedTags.length > 0;
+
+  useEffect(() => {
+    if (open && !filteredItems.some((r) => String(r.product.id) === open)) {
+      setOpen(null);
+    }
+  }, [filteredItems, open]);
+
+  const handleSwitch = async (name: string, productId: number) => {
+    toast(`Interest logged: ${name}`, {
+      description: "We let the brand know — they see this in their dashboard insights.",
+    });
+    try {
+      await apiFetch("/api/recommendations/clicks", {
+        method: "POST",
+        body: JSON.stringify({ product_id: productId, source: "dashboard" }),
+      });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn("click record failed", err);
+    }
+  };
+
+  const toggleTag = (tag: string) => {
+    setSelectedTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
+    );
+  };
+
+  const clearFilters = () => {
+    setCategoryFilter("all");
+    setPriceBucket("all");
+    setSelectedTags([]);
   };
 
   return (
@@ -372,7 +480,7 @@ function RecommendationsFeed({ items, loading }: { items: RecommendationItem[]; 
       <div className="mx-auto max-w-7xl px-5 sm:px-8 py-14">
         <div className="flex items-end justify-between flex-wrap gap-4">
           <div>
-            <SectionLabel number="§ B" label="Recommendations" />
+            <SectionLabel number="B" label="Recommendations" />
             <h2 className="display-serif text-3xl sm:text-4xl text-charcoal mt-3">Live picks from your values + history.</h2>
           </div>
         </div>
@@ -388,8 +496,97 @@ function RecommendationsFeed({ items, loading }: { items: RecommendationItem[]; 
           </PaperCard>
         )}
 
+        {!loading && items.length > 0 && (
+          <PaperCard className="mt-8 p-5 sm:p-6 border border-charcoal/10">
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              <Filter className="h-4 w-4 text-charcoal/50" aria-hidden />
+              <span className="text-[0.65rem] uppercase tracking-widest text-charcoal/55">Filter picks</span>
+              {filtersActive && (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="ml-auto text-xs font-medium text-terracotta hover:text-charcoal underline underline-offset-2"
+                >
+                  Clear all
+                </button>
+              )}
+            </div>
+            <div className="flex flex-col lg:flex-row lg:flex-wrap gap-5 lg:gap-x-8 lg:gap-y-4">
+              <label className="flex flex-col gap-1.5 min-w-[10rem]">
+                <span className="text-[0.65rem] uppercase tracking-widest text-charcoal/50">Type</span>
+                <select
+                  value={categoryFilter}
+                  onChange={(e) => setCategoryFilter(e.target.value)}
+                  className="bg-cream border border-charcoal/20 rounded-sm px-3 py-2 text-sm text-charcoal focus:outline-none focus:ring-2 focus:ring-terracotta/40"
+                >
+                  <option value="all">All categories</option>
+                  {categoryOptions.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1.5 min-w-[10rem]">
+                <span className="text-[0.65rem] uppercase tracking-widest text-charcoal/50">Price</span>
+                <select
+                  value={priceBucket}
+                  onChange={(e) => setPriceBucket(e.target.value as PriceBucket)}
+                  className="bg-cream border border-charcoal/20 rounded-sm px-3 py-2 text-sm text-charcoal focus:outline-none focus:ring-2 focus:ring-terracotta/40"
+                >
+                  <option value="all">Any price</option>
+                  <option value="under25">Under $25</option>
+                  <option value="25-50">$25 – $50</option>
+                  <option value="50-100">$50 – $100</option>
+                  <option value="over100">$100+</option>
+                </select>
+              </label>
+              {tagOptions.length > 0 && (
+                <div className="flex flex-col gap-2 flex-1 min-w-[min(100%,18rem)]">
+                  <span className="text-[0.65rem] uppercase tracking-widest text-charcoal/50">Tags</span>
+                  <div className="flex flex-wrap gap-2">
+                    {tagOptions.map((tag) => {
+                      const on = selectedTags.includes(tag);
+                      return (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => toggleTag(tag)}
+                          className={`text-[0.65rem] uppercase tracking-wider px-2.5 py-1 rounded-sm border transition-colors ${
+                            on
+                              ? "border-forest bg-forest/10 text-forest font-semibold"
+                              : "border-charcoal/20 text-charcoal/70 hover:border-terracotta/50 hover:text-charcoal"
+                          }`}
+                        >
+                          {tag}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[0.65rem] text-charcoal/45">Match any selected tag.</p>
+                </div>
+              )}
+            </div>
+            {filtersActive && (
+              <p className="mt-4 text-xs text-charcoal/55 num-display">
+                Showing {filteredItems.length} of {items.length}
+              </p>
+            )}
+          </PaperCard>
+        )}
+
+        {!loading && items.length > 0 && filteredItems.length === 0 && (
+          <PaperCard className="mt-6 p-8 text-charcoal/70">
+            No recommendations match these filters.{" "}
+            <button type="button" onClick={clearFilters} className="font-semibold text-terracotta underline underline-offset-4">
+              Clear filters
+            </button>{" "}
+            to see everything again.
+          </PaperCard>
+        )}
+
         <div className="mt-8 space-y-4">
-          {items.map((r) => {
+          {filteredItems.map((r) => {
             const Icon = recIcon(r.product.category);
             const idKey = String(r.product.id);
             const isOpen = open === idKey;
@@ -443,11 +640,6 @@ function RecommendationsFeed({ items, loading }: { items: RecommendationItem[]; 
                             </div>
                           )}
                         </div>
-                        {deltaLabel && (
-                          <div className={`text-[0.7rem] mt-2 font-semibold tracking-wide ${deltaTone}`}>
-                            {deltaLabel}
-                          </div>
-                        )}
                       </>
                     ) : (
                       <>
@@ -462,6 +654,11 @@ function RecommendationsFeed({ items, loading }: { items: RecommendationItem[]; 
                     <div className="text-[0.65rem] uppercase tracking-widest text-terracotta">Aligned pick</div>
                     <div className="display-serif text-xl text-charcoal mt-1 leading-snug">{r.product.name}</div>
                     <div className="num-display text-charcoal text-2xl mt-2">{altPrice ?? "—"}</div>
+                    {deltaLabel && (
+                      <div className={`text-[0.7rem] mt-2 font-semibold tracking-wide ${deltaTone}`}>
+                        {deltaLabel}
+                      </div>
+                    )}
                     <div className="mt-3 flex flex-wrap gap-1.5">
                       {r.product.key_features?.slice(0, 3).map((f) => (
                         <Stamp key={f} color="forest" className="!text-[0.6rem]">
@@ -473,7 +670,7 @@ function RecommendationsFeed({ items, loading }: { items: RecommendationItem[]; 
                   <div className="md:col-span-2 p-6 flex flex-col justify-between gap-3">
                     <button
                       type="button"
-                      onClick={() => handleSwitch(r.product.name)}
+                      onClick={() => handleSwitch(r.product.name, r.product.id)}
                       className="bg-terracotta text-cream px-4 py-2.5 text-xs font-semibold tracking-wide rounded-sm hover:bg-charcoal transition-colors inline-flex items-center justify-center gap-1.5"
                     >
                       Switch & Earn <ArrowRight className="h-3.5 w-3.5" />
@@ -507,7 +704,7 @@ function RecommendationsFeed({ items, loading }: { items: RecommendationItem[]; 
                             {r.reasons.map((line) => (
                               <li
                                 key={line}
-                                className="text-charcoal/75 text-xs uppercase tracking-wider before:content-['§'] before:text-terracotta before:mr-2"
+                                className="text-charcoal/75 text-xs uppercase tracking-wider before:content-['•'] before:text-terracotta before:mr-2"
                               >
                                 {line}
                               </li>
@@ -562,7 +759,7 @@ function RewardsAndValues({
     <section className="bg-cream-deep border-t border-charcoal/15">
       <div className="mx-auto max-w-7xl px-5 sm:px-8 py-14 grid lg:grid-cols-2 gap-8">
         <div>
-          <SectionLabel number="§ D" label="Loyalty & Rewards" />
+          <SectionLabel number="C" label="Loyalty & Rewards" />
           <h2 className="display-serif text-3xl text-charcoal mt-3">Points ledger (live)</h2>
           {showConnectCta && (
             <Link
@@ -611,7 +808,7 @@ function RewardsAndValues({
         </div>
 
         <div>
-          <SectionLabel number="§ E" label="Preferences & Values" />
+          <SectionLabel number="D" label="Preferences & Values" />
           <h2 className="display-serif text-3xl text-charcoal mt-3">Spend like you mean it.</h2>
           <PaperCard className="mt-6 p-6">
             <Eyebrow>Value toggles</Eyebrow>

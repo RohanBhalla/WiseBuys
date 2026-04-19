@@ -36,6 +36,21 @@ class RecommendationItem(BaseModel):
     evidence_line_item_ids: list[int]
 
 
+class RecommendationClickCreate(BaseModel):
+    product_id: int
+    source: str | None = None
+
+
+class RecommendationClickPublic(BaseModel):
+    id: int
+    product_id: int
+    vendor_user_id: int
+    source: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class SpendingInsight(BaseModel):
     knot_merchant_id: int
     merchant_name: str | None = None

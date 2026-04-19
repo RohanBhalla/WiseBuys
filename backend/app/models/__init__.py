@@ -1,3 +1,4 @@
+from app.models.analytics import RecommendationClick
 from app.models.catalog import VendorProduct
 from app.models.customer import CustomerProfile, CustomerSecondaryFocus
 from app.models.knot import KnotLineItem, KnotMerchantAccount, KnotPurchase
@@ -18,6 +19,7 @@ __all__ = [
     "KnotLineItem",
     "KnotMerchantAccount",
     "KnotPurchase",
+    "RecommendationClick",
     "RewardEvent",
     "RewardEventType",
     "User",

@@ -117,6 +117,76 @@ export interface SpendingInsight {
   total_spent: number;
 }
 
+export interface VendorAnalyticsSummary {
+  vendor_user_id: number;
+  company_legal_name: string;
+  total_products: number;
+  published_products: number;
+  allowed_tag_count: number;
+  total_clicks: number;
+  clicks_last_30d: number;
+  clicks_last_7d: number;
+  distinct_click_users: number;
+  recommended_customers: number;
+  recommendation_appearances: number;
+  reach_sample_size: number;
+  total_active_customers: number;
+}
+
+export interface CompetitorRow {
+  vendor_user_id: number;
+  company_legal_name: string;
+  shared_categories: string[];
+  shared_tag_labels: string[];
+  overlap_product_count: number;
+  their_avg_price: number | null;
+  your_avg_price: number | null;
+  price_position: string;
+  co_recommendation_count: number;
+  overlap_score: number;
+}
+
+export interface PricingInsightRow {
+  category: string;
+  your_avg_price: number;
+  your_min_price: number;
+  your_max_price: number;
+  market_avg_price: number;
+  market_median_price: number;
+  market_min_price: number;
+  market_max_price: number;
+  market_sample_size: number;
+  percentile: number;
+  position: string;
+  recommendation: string;
+}
+
+export interface TopProductRow {
+  product_id: number;
+  name: string;
+  category: string | null;
+  price_hint: number | null;
+  is_published: boolean;
+  recommendation_appearances: number;
+  click_count: number;
+}
+
+export interface RecentClickRow {
+  id: number;
+  product_id: number;
+  product_name: string | null;
+  source: string;
+  created_at: string;
+}
+
+export interface VendorAnalyticsResponse {
+  summary: VendorAnalyticsSummary;
+  competitors: CompetitorRow[];
+  pricing_insights: PricingInsightRow[];
+  top_products: TopProductRow[];
+  recent_clicks: RecentClickRow[];
+}
+
 export type RewardEventType =
   | "account_linked"
   | "onboarding_complete"

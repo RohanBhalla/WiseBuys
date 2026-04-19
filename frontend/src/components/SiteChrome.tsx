@@ -26,7 +26,7 @@ export function SiteHeader() {
           </span>
           <span className="display-serif text-2xl text-charcoal tracking-tight">WiseBuys</span>
           <span className="hidden sm:inline-block text-[0.6rem] font-semibold tracking-[0.18em] uppercase text-terracotta border border-terracotta/50 rounded-sm px-1.5 py-0.5 ml-1">
-            Est. 2025
+            Est. 2026
           </span>
         </Link>
 
@@ -181,7 +181,7 @@ export function SiteFooter() {
       </div>
       <div className="border-t border-charcoal/15">
         <div className="mx-auto max-w-7xl px-5 sm:px-8 py-5 flex flex-col sm:flex-row gap-2 justify-between text-xs text-charcoal/55">
-          <span>© 2025 WiseBuys — Printed on the internet.</span>
+          <span>© 2026 WiseBuys — Printed on the internet.</span>
           <span className="tracking-[0.2em] uppercase">A periodical for the discerning shopper</span>
         </div>
       </div>
